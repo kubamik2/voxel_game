@@ -1,6 +1,7 @@
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) tex_coords: vec2f
+    @location(0) tex_coords: vec2f,
+    @location(1) texture_offset: vec2f
 }
 
 struct VertexInput {
@@ -17,6 +18,7 @@ struct InstanceInput {
     @location(3) matrix_1: vec4f,
     @location(4) matrix_2: vec4f,
     @location(5) matrix_3: vec4f,
+    @location(6) texture_offset: vec2f
 }
 
 @group(1) @binding(0) var<uniform> camera: CameraUniform;
@@ -33,6 +35,7 @@ fn vs_main(in: VertexInput, instance: InstanceInput) -> VertexOutput {
     let clip_position = vec4f(in.position, 1.0);
     out.clip_position = camera.view_projection * model_matrix * vec4f(in.position, 1.0);
     out.tex_coords = in.tex_coords;
+    out.texture_offset = instance.texture_offset;
     return out;
 }
 
@@ -41,5 +44,9 @@ fn vs_main(in: VertexInput, instance: InstanceInput) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    return textureSample(t_diffuse, s_diffuse, in.tex_coords);
+    var tex_coords = vec2f();
+
+    tex_coords.x = in.tex_coords.x + in.texture_offset.x;
+    tex_coords.y = in.tex_coords.y + in.texture_offset.y;
+    return textureSample(t_diffuse, s_diffuse, tex_coords);
 }

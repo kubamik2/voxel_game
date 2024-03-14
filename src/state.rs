@@ -1,6 +1,6 @@
-use cgmath::Rotation3;
+use cgmath::{Point3, Rotation3};
 use winit::window::Window;
-use crate::vertex::Vertex;
+use crate::{block::{Bitmap, Block}, chunk::Chunk, vertex::Vertex};
 use wgpu::util::DeviceExt;
 
 pub struct State {
@@ -79,10 +79,10 @@ impl State {
 
         let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
             label: None,
-            features: wgpu::Features::default(),
+            features: wgpu::Features::default() | wgpu::Features::POLYGON_MODE_LINE,
             limits: wgpu::Limits::default()
         }, None).await.unwrap();
-
+        dbg!(wgpu::Limits::default().max_buffer_size);
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = surface_caps.formats.iter().copied().find(|p| p.is_srgb()).unwrap_or(surface_caps.formats[0]);
 
@@ -142,8 +142,6 @@ impl State {
 
         let mut camera = crate::camera::Camera::default(config.width, config.height);
 
-        camera.eye.y = 1.0;
-
         let mut camera_uniform = crate::camera::CameraUniform::new();
         camera_uniform.update_view_projection(&camera);
 
@@ -185,18 +183,96 @@ impl State {
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into())
         });
 
-        let mut instances = vec![];
+        
 
-        for x in 0..10 {
-            for z in 0..10 {
-                let position = cgmath::Vector3::new(x as f32 * 2.0, 0.0, z as f32 * 2.0);
+        let mut instances = Vec::with_capacity(100_000);
 
-                let rotation = cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0));
 
-                instances.push(crate::instance::Instance { position, rotation })
+        let now = std::time::Instant::now();
+
+        let mut chunks = vec![];
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        for ix in 0..8 {
+            for iz in 0..8 {
+                let mut blocks = Vec::with_capacity(16 * 16 * 256);
+                for y in 0..128 {
+                    for z in 0..16 {
+                        for x in 0..16 {
+                            let material = if rng.gen::<bool>() { crate::block::Material::Grass } else { crate::block::Material::Air };
+                            blocks.push(Block { position: Point3::new(x as f32 + ix as f32 * 16.0, y as f32, z as f32 + iz as f32 * 16.0), bitmap: Bitmap(0b00000000), material });
+                        }
+                    }
+                }
+
+                for y in 128..256 {
+                    for z in 0..16 {
+                        for x in 0..16 {
+                            blocks.push(Block { position: Point3::new(x as f32 + ix as f32 * 16.0, y as f32, z as f32 + iz as f32 * 16.0), bitmap: Bitmap(0b00000000), material: crate::block::Material::Air });
+                        }
+                    }
+                }
+                chunks.push(Chunk { blocks });
             }
         }
+        println!("chunk_gen: {:?}", now.elapsed());
+        
+        
 
+        let now = std::time::Instant::now();
+        for chunk in chunks.iter_mut() {
+            chunk.bake();
+        }  
+        println!("chunk_baking: {:?}", now.elapsed());
+
+        let now = std::time::Instant::now();
+        for chunk in chunks.iter() {
+            for block in chunk.blocks.iter().filter(|p| p.material != crate::block::Material::Air) {
+                let Point3 { x, y, z } = block.position;
+                let position1 = cgmath::Vector3::new(x as f32, y as f32, z as f32);
+                let position2 = cgmath::Vector3::new(x as f32 + 1.0, y as f32, z as f32);
+                let position3 = cgmath::Vector3::new(x as f32 + 1.0, y as f32, z as f32 - 1.0);
+                let position4 = cgmath::Vector3::new(x as f32, y as f32, z as f32 - 1.0);
+                let position5 = cgmath::Vector3::new(x as f32, y as f32 + 1.0, z as f32);
+                let position6 = cgmath::Vector3::new(x as f32, y as f32, z as f32 - 1.0);
+                
+                let texture_offsets = block.material.texture_offsets();
+    
+                if !block.positive_z_occupied() {
+                    instances.push(crate::instance::Instance { position: position1, rotation: cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_y(), cgmath::Deg(0.0)), texture_offset: texture_offsets[0] });
+                }
+    
+                if !block.positive_x_occupied() {
+                    instances.push(crate::instance::Instance { position: position2, rotation: cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_y(), cgmath::Deg(90.0)), texture_offset: texture_offsets[1] });
+                }
+    
+                if !block.negative_z_occupied() {
+                    instances.push(crate::instance::Instance { position: position3, rotation: cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_y(), cgmath::Deg(180.0)), texture_offset: texture_offsets[2] });
+                }
+                
+                if !block.negative_x_occupied() {
+                    instances.push(crate::instance::Instance { position: position4, rotation: cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_y(), cgmath::Deg(-90.0)), texture_offset: texture_offsets[3] });
+                }
+    
+                if !block.positive_y_occupied() {
+                    instances.push(crate::instance::Instance { position: position5, rotation: cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_x(), cgmath::Deg(-90.0)), texture_offset: texture_offsets[4] });
+                }
+    
+                if !block.negative_y_occupied() {
+                    instances.push(crate::instance::Instance { position: position6, rotation: cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_x(), cgmath::Deg(90.0)), texture_offset: texture_offsets[5] });
+                }
+    
+                // instances.push(crate::instance::Instance { position: position1, rotation: cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_y(), cgmath::Deg(0.0)), texture_offset: (0.0 * 0.0625, 0.0).into() });
+                // instances.push(crate::instance::Instance { position: position2, rotation: cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_y(), cgmath::Deg(90.0)), texture_offset: (0.0 * 0.0625, 0.0).into() });
+                // instances.push(crate::instance::Instance { position: position3, rotation: cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_y(), cgmath::Deg(180.0)), texture_offset: (0.0 * 0.0625, 0.0).into() });
+                // instances.push(crate::instance::Instance { position: position4, rotation: cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_y(), cgmath::Deg(-90.0)), texture_offset: (0.0 * 0.0625, 0.0).into() });
+                // instances.push(crate::instance::Instance { position: position5, rotation: cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_x(), cgmath::Deg(-90.0)), texture_offset: (0.0 * 0.0625, 0.0).into() });
+                // instances.push(crate::instance::Instance { position: position6, rotation: cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_x(), cgmath::Deg(90.0)), texture_offset: (0.0 * 0.0625, 0.0).into() });
+            }
+        }
+        
+        println!("chunk_instance_stiching: {:?}", now.elapsed());
+        
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("instance buffer"),
             usage: wgpu::BufferUsages::VERTEX,
@@ -259,13 +335,13 @@ impl State {
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("vertex buffer"),
             usage: wgpu::BufferUsages::VERTEX,
-            contents: bytemuck::cast_slice(VERTICES)
+            contents: bytemuck::cast_slice(&Block::VERTICES)
         });
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("index buffer"),
             usage: wgpu::BufferUsages::INDEX,
-            contents: bytemuck::cast_slice(INDICES)
+            contents: bytemuck::cast_slice(&Block::INDICES)
         });
 
         let camera_controller = crate::camera::CameraController::new(4.0);
@@ -287,7 +363,7 @@ impl State {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }),
+                        load: wgpu::LoadOp::Clear(wgpu::Color { r: 123.0 / 255.0, g: 164.0 / 255.0, b: 1.0, a: 1.0 }),
                         store: wgpu::StoreOp::Store
                     }
                 })],
@@ -312,7 +388,7 @@ impl State {
             render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
 
-            render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..self.instances.len() as u32);
+            render_pass.draw_indexed(0..Block::INDICES.len() as u32, 0, 0..self.instances.len() as u32);
             // render_pass.draw(0..VERTICES.len() as u32, 0..1);
         }
 

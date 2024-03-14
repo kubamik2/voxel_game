@@ -15,3 +15,4 @@ pollster = "0.3"
 bytemuck = { version = "1.14.3", features = ["derive"] }
 image = {version = "0.24.9", features = ["jpeg", "png"] }
 anyhow = "1.0.80"
+rand = "0.8.5"

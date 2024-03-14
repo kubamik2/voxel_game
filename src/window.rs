@@ -8,7 +8,7 @@ pub fn run() {
     env_logger::init();
     let event_loop = EventLoop::new();
     let mut window = WindowBuilder::new()
-    .with_inner_size(winit::dpi::PhysicalSize::new(800, 800))
+    .with_inner_size(winit::dpi::PhysicalSize::new(1000, 1000))
     .build(&event_loop).unwrap();
 
     window.set_cursor_grab(winit::window::CursorGrabMode::Confined);
@@ -35,7 +35,7 @@ pub fn run() {
             
                 state.render();
                 let render_time = now.elapsed() - update_time;
-                println!("update_time: {:?}\nrender_time: {:?}\n", update_time, render_time);
+                //println!("update_time: {:?}\nrender_time: {:?}\n", update_time, render_time);
                 last_render_time = now.elapsed();
             },
             Event::MainEventsCleared => {

@@ -5,8 +5,8 @@ mod texture;
 mod camera;
 mod instance;
 mod block;
-mod chunk;
 mod mesh;
+mod chunk;
 
 fn main() {
     window::run()
