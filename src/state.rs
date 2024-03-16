@@ -1,5 +1,7 @@
+use std::borrow::Borrow;
+
 use cgmath::{Point3, Rotation3};
-use winit::window::Window;
+use winit::{raw_window_handle::HasWindowHandle, window::Window};
 use crate::{block::{Bitmap, Block, Material}, chunk::{Chunk, World, WORLD_SIZE}, vertex::{Vertex, VertexPacked}};
 use wgpu::util::DeviceExt;
 
@@ -33,6 +35,7 @@ impl State {
             ..Default::default()
         });
 
+        
         let surface = unsafe { instance.create_surface(&window) }.unwrap();
 
         let adapter = instance.request_adapter(&wgpu::RequestAdapterOptionsBase {
@@ -318,6 +321,7 @@ blocks: {}
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
+        self.window.pre_present_notify();
         output.present();
 
         Ok(())

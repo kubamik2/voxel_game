@@ -1,12 +1,10 @@
 use winit::{
-    event::*,
-    event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder
+    event::*, event_loop::{ControlFlow, EventLoop}, keyboard::{KeyCode, PhysicalKey}, window::WindowBuilder
 };
 
 pub fn run() {
     env_logger::init();
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoop::new().unwrap();
     let mut window = WindowBuilder::new()
     .with_inner_size(winit::dpi::PhysicalSize::new(1000, 1000))
     .build(&event_loop).unwrap();
@@ -17,29 +15,30 @@ pub fn run() {
     let mut state = pollster::block_on(crate::state::State::new(window));
     let mut last_render_time = std::time::Duration::ZERO;
 
-    event_loop.run(move |event, _, control_flow| {
+    event_loop.run(move |event, elwt| {
+        elwt.set_control_flow(ControlFlow::Poll);
         match event {
             Event::WindowEvent { window_id, event } if window_id == state.window.id() => {
                 state.input(&event);
                 match event {
                     WindowEvent::CloseRequested 
-                    | WindowEvent::KeyboardInput { input: KeyboardInput { state: ElementState::Pressed, virtual_keycode: Some(VirtualKeyCode::Escape), .. }, .. } => {
-                        control_flow.set_exit();
+                    | WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(KeyCode::Escape), state: ElementState::Pressed, .. }, ..} => {
+                        elwt.exit();
                     },
+                    WindowEvent::RedrawRequested if window_id == state.window.id() => {
+                        let now = std::time::Instant::now();
+                        state.update(last_render_time.as_secs_f32());
+                        let update_time = now.elapsed();
+                    
+                        state.render();
+                        let render_time = now.elapsed() - update_time;
+                        println!("update_time: {:?}\nrender_time: {:?}\n", update_time, render_time);
+                        last_render_time = now.elapsed();
+                    }
                     _ => ()
                 }
             },
-            Event::RedrawRequested(window_id) if window_id == state.window.id() => {
-                let now = std::time::Instant::now();
-                state.update(last_render_time.as_secs_f32());
-                let update_time = now.elapsed();
-            
-                state.render();
-                let render_time = now.elapsed() - update_time;
-                println!("update_time: {:?}\nrender_time: {:?}\n", update_time, render_time);
-                last_render_time = now.elapsed();
-            },
-            Event::MainEventsCleared => {
+            Event::NewEvents(StartCause::Poll) => {
                 state.window.request_redraw();
             },
             Event::DeviceEvent { event, .. } => {
@@ -50,5 +49,5 @@ pub fn run() {
             }
             _ => ()
         }
-    });
+    }).unwrap();
 }

@@ -74,7 +74,7 @@ pub struct CameraController {
     pub speed: f32,
     pub controls: Controls
 }
-use winit::event::*;
+use winit::{event::*, keyboard::{KeyCode, PhysicalKey}};
 impl CameraController {
     pub fn new(speed: f32) -> Self {
         Self {
@@ -85,20 +85,18 @@ impl CameraController {
 
     pub fn process_events(&mut self, event: &WindowEvent) {
         match event {
-            WindowEvent::KeyboardInput { input, .. } => {
-                let pressed = input.state == ElementState::Pressed;
-                if let Some(virtual_keycode) = input.virtual_keycode {
-                    match virtual_keycode {
-                        VirtualKeyCode::W => { self.controls.forward_pressed = pressed },
-                        VirtualKeyCode::S => { self.controls.backward_pressed = pressed },
-                        VirtualKeyCode::A => { self.controls.left_pressed = pressed },
-                        VirtualKeyCode::D => { self.controls.right_pressed = pressed },
-                        VirtualKeyCode::Space => { self.controls.up_pressed = pressed },
-                        VirtualKeyCode::LShift => { self.controls.down_pressed = pressed },
-                        _ => ()
-                    }
+            WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(key_code), state, .. }, .. } => {
+                let pressed = state.is_pressed();
+                match key_code {
+                    KeyCode::KeyW => { self.controls.forward_pressed = pressed },
+                    KeyCode::KeyS => { self.controls.backward_pressed = pressed },
+                    KeyCode::KeyA => { self.controls.left_pressed = pressed },
+                    KeyCode::KeyD => { self.controls.right_pressed = pressed },
+                    KeyCode::Space => { self.controls.up_pressed = pressed },
+                    KeyCode::ShiftLeft => { self.controls.down_pressed = pressed },
+                    _ => ()
                 }
-            },
+            }
             _ => ()
         }
     }
