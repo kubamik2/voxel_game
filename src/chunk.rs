@@ -2,7 +2,7 @@ pub const CHUNK_SIZE: usize = 16;
 pub const CHUNK_HEIGHT: usize = 64;
 use std::ops::{Index, IndexMut};
 
-use crate::{block::{Block, Material}, vertex::Vertex};
+use crate::{block::{Block, Material}, vertex::{Vertex, VertexPacked}};
 
 pub struct Chunk {
     pub blocks: Vec<Block>
@@ -22,7 +22,7 @@ impl IndexMut<(usize, usize, usize)> for Chunk {
 }
 
 impl Chunk {
-    pub fn push_vertex_data(&self, vertex_array: &mut Vec<Vertex>, index_array: &mut Vec<u32>, mut index_offset: u32) -> u32 {
+    pub fn push_vertex_data(&self, vertex_array: &mut Vec<VertexPacked>, index_array: &mut Vec<u32>, mut index_offset: u32) -> u32 {
         for block in self.blocks.iter().filter(|p| p.material != Material::Air) {
             let texture_offsets = block.material.texture_offsets();
             for (i, mut face) in Block::FACE_VERTICES.iter().cloned().enumerate() {
@@ -35,7 +35,7 @@ impl Chunk {
                         vertex.tex_coords[0] += texture_offsets[i].x;
                         vertex.tex_coords[1] += texture_offsets[i].y;
 
-                        vertex_array.push(*vertex);
+                        vertex_array.push(vertex.pack());
                     }
     
                     for index in Block::FACE_INDICES {
@@ -90,7 +90,7 @@ impl Chunk {
     }
 }
 
-pub const WORLD_SIZE: usize = 16;
+pub const WORLD_SIZE: usize = 24;
 
 pub struct World {
     pub chunks: Vec<Chunk>

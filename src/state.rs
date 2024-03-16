@@ -1,6 +1,6 @@
 use cgmath::{Point3, Rotation3};
 use winit::window::Window;
-use crate::{block::{Bitmap, Block, Material}, chunk::{Chunk, World, WORLD_SIZE}, vertex::Vertex};
+use crate::{block::{Bitmap, Block, Material}, chunk::{Chunk, World, WORLD_SIZE}, vertex::{Vertex, VertexPacked}};
 use wgpu::util::DeviceExt;
 
 pub struct State {
@@ -20,7 +20,7 @@ pub struct State {
     pub camera_bind_group: wgpu::BindGroup,
     pub camera_buffer: wgpu::Buffer,
     pub depth_texture: crate::texture::Texture,
-    pub vertex_array: Vec<Vertex>,
+    pub vertex_array: Vec<VertexPacked>,
     pub index_array: Vec<u32>,
 }
 
@@ -42,7 +42,7 @@ impl State {
         }).await.unwrap();
 
         let limits = wgpu::Limits {
-            max_buffer_size: 536_870_912,
+            max_buffer_size: 1024 * 1024 * 1024,
             ..Default::default()
         };
 
@@ -104,13 +104,15 @@ impl State {
             blocks += chunk.blocks.iter().filter(|p| p.material != Material::Air).count();
             index_offset = chunk.push_vertex_data(&mut vertex_array, &mut index_array, index_offset);
         }
-        dbg!(blocks);
-
-        dbg!(vertex_array.len());
-        dbg!(index_array.len());
-
-        dbg!(vertex_array.len() * 20);
-        dbg!(index_array.len() * 4);
+        println!(
+r"memory usage: {:.2} MiB
+vertices: {},
+indices: {},
+blocks: {}
+",      (vertex_array.len() * std::mem::size_of::<VertexPacked>() + index_array.len() * std::mem::size_of::<u32>()) as f32 / 1_048_576.0,
+        vertex_array.len(),
+        index_array.len(),
+        blocks);
 
         let diffuse_bytes = include_bytes!("textures/texture_atlas.png");
         let texture = crate::texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "texture").unwrap();
@@ -213,7 +215,8 @@ impl State {
             vertex: wgpu::VertexState {
                 module: &shader,
                 buffers: &[
-                    Vertex::desc(),
+                    // Vertex::desc(),
+                    VertexPacked::desc(),
                     //crate::instance::InstanceRaw::desc(),
                 ],
                 entry_point: "vs_main"
