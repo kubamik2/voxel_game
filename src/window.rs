@@ -13,6 +13,7 @@ pub fn run() {
 
     window.set_cursor_grab(winit::window::CursorGrabMode::Confined);
     window.set_cursor_visible(false);
+    window.set_outer_position(winit::dpi::LogicalPosition::new(900.0, 0.0));
     let mut state = pollster::block_on(crate::state::State::new(window));
     let mut last_render_time = std::time::Duration::ZERO;
 
@@ -35,7 +36,7 @@ pub fn run() {
             
                 state.render();
                 let render_time = now.elapsed() - update_time;
-                //println!("update_time: {:?}\nrender_time: {:?}\n", update_time, render_time);
+                println!("update_time: {:?}\nrender_time: {:?}\n", update_time, render_time);
                 last_render_time = now.elapsed();
             },
             Event::MainEventsCleared => {
@@ -44,6 +45,7 @@ pub fn run() {
             Event::DeviceEvent { event, .. } => {
                 if let DeviceEvent::MouseMotion { delta } = event {
                     state.camera_controller.mouse_move(delta.0 as f32, delta.1 as f32, &mut state.camera);
+                    state.window.set_cursor_position(winit::dpi::LogicalPosition::new(0.0, 0.0));
                 }
             }
             _ => ()

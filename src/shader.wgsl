@@ -1,7 +1,6 @@
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) tex_coords: vec2f,
-    @location(1) texture_offset: vec2f
+    @location(0) tex_coords: vec2f
 }
 
 struct VertexInput {
@@ -24,18 +23,17 @@ struct InstanceInput {
 @group(1) @binding(0) var<uniform> camera: CameraUniform;
 
 @vertex
-fn vs_main(in: VertexInput, instance: InstanceInput) -> VertexOutput {
+fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    let model_matrix = mat4x4f(
-        instance.matrix_0,
-        instance.matrix_1,
-        instance.matrix_2,
-        instance.matrix_3
-    );
+    // let model_matrix = mat4x4f(
+    //     instance.matrix_0,
+    //     instance.matrix_1,
+    //     instance.matrix_2,
+    //     instance.matrix_3
+    // );
     let clip_position = vec4f(in.position, 1.0);
-    out.clip_position = camera.view_projection * model_matrix * vec4f(in.position, 1.0);
+    out.clip_position = camera.view_projection * vec4f(in.position, 1.0);
     out.tex_coords = in.tex_coords;
-    out.texture_offset = instance.texture_offset;
     return out;
 }
 
@@ -45,8 +43,12 @@ fn vs_main(in: VertexInput, instance: InstanceInput) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     var tex_coords = vec2f();
+    let tile_x = 1.0;
+    let base_tile_coords = floor(in.tex_coords / 0.0625) * 0.0625;
+    let local_tile_coords = in.tex_coords - base_tile_coords;
 
-    tex_coords.x = in.tex_coords.x + in.texture_offset.x;
-    tex_coords.y = in.tex_coords.y + in.texture_offset.y;
+
+    tex_coords.x = base_tile_coords.x + (local_tile_coords.x * tile_x) % 0.0625;
+    tex_coords.y = in.tex_coords.y;
     return textureSample(t_diffuse, s_diffuse, tex_coords);
 }

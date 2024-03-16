@@ -16,7 +16,7 @@ pub struct Camera {
 impl Camera {
     pub fn default(width: u32, height: u32) -> Self {
         Self {
-            eye: Point3::new(0.0, 130.0, 0.0),
+            eye: Point3::new(0.0, 0.0, 0.0),
             yaw: Rad(0.0),
             pitch: Rad(0.0),
             up: cgmath::Vector3::unit_y(),

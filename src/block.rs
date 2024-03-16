@@ -1,5 +1,5 @@
 
-use cgmath::{Point3};
+use cgmath::Point3;
 use crate::vertex::Vertex;
 
 pub struct Block {
@@ -9,56 +9,48 @@ pub struct Block {
 }
 
 impl Block {
-    pub const VERTICES: &'static [Vertex] = &[
-        Vertex { position: [0.0, 0.0, 0.0], tex_coords: [0.0, 0.0625] }, // 0
-        Vertex { position: [1.0, 0.0, 0.0], tex_coords: [0.0625, 0.0625] },
-        Vertex { position: [0.0, 1.0, 0.0], tex_coords: [0.0, 0.0] },
-        Vertex { position: [1.0, 1.0, 0.0], tex_coords: [0.0625, 0.0] },
-
-        // Vertex { position: [1.0, 0.0, 0.0], tex_coords: [0.0, 0.0625] }, // 4
-        // Vertex { position: [1.0, 0.0, -1.0], tex_coords: [0.0625, 0.0625] },
-        // Vertex { position: [1.0, 1.0, 0.0], tex_coords: [0.0, 0.0] },
-        // Vertex { position: [1.0, 1.0, -1.0], tex_coords: [0.0625, 0.0] },
-
-        // Vertex { position: [1.0, 0.0, -1.0], tex_coords: [0.0, 0.0625] }, // 8
-        // Vertex { position: [0.0, 0.0, -1.0], tex_coords: [0.0625, 0.0625] },
-        // Vertex { position: [1.0, 1.0, -1.0], tex_coords: [0.0, 0.0] },
-        // Vertex { position: [0.0, 1.0, -1.0], tex_coords: [0.0625, 0.0] },
-
-        // Vertex { position: [0.0, 0.0, -1.0], tex_coords: [0.0, 0.0625] }, // 12
-        // Vertex { position: [0.0, 0.0, 0.0], tex_coords: [0.0625, 0.0625] },
-        // Vertex { position: [0.0, 1.0, -1.0], tex_coords: [0.0, 0.0] },
-        // Vertex { position: [0.0, 1.0, 0.0], tex_coords: [0.0625, 0.0] },
-
-        // Vertex { position: [0.0, 0.0, -1.0], tex_coords: [0.0, 0.0625] }, // 16
-        // Vertex { position: [1.0, 0.0, -1.0], tex_coords: [0.0625, 0.0625] },
-        // Vertex { position: [0.0, 0.0, 0.0], tex_coords: [0.0, 0.0] },
-        // Vertex { position: [1.0, 0.0, 0.0], tex_coords: [0.0625, 0.0] },
-
-        // Vertex { position: [0.0, 1.0, 0.0], tex_coords: [0.0, 0.0625] }, // 20
-        // Vertex { position: [1.0, 1.0, 0.0], tex_coords: [0.0625, 0.0625] },
-        // Vertex { position: [0.0, 1.0, -1.0], tex_coords: [0.0, 0.0] },
-        // Vertex { position: [1.0, 1.0, -1.0], tex_coords: [0.0625, 0.0] },
+    pub const FACE_VERTICES: [[Vertex; 4]; 6] = [
+        [
+            Vertex { position: [1.0, 0.0, 0.0], tex_coords: [0.0, 0.0625] }, // 1
+            Vertex { position: [1.0, 0.0, -1.0], tex_coords: [0.0625, 0.0625] },
+            Vertex { position: [1.0, 1.0, 0.0], tex_coords: [0.0, 0.0] },
+            Vertex { position: [1.0, 1.0, -1.0], tex_coords: [0.0625, 0.0] },
+        ],
+        [
+            Vertex { position: [0.0, 0.0, -1.0], tex_coords: [0.0, 0.0625] }, // 3
+            Vertex { position: [0.0, 0.0, 0.0], tex_coords: [0.0625, 0.0625] },
+            Vertex { position: [0.0, 1.0, -1.0], tex_coords: [0.0, 0.0] },
+            Vertex { position: [0.0, 1.0, 0.0], tex_coords: [0.0625, 0.0] },
+        ],
+        [
+            Vertex { position: [0.0, 0.0, 0.0], tex_coords: [0.0, 0.0625] }, // 0
+            Vertex { position: [1.0, 0.0, 0.0], tex_coords: [0.0625, 0.0625] },
+            Vertex { position: [0.0, 1.0, 0.0], tex_coords: [0.0, 0.0] },
+            Vertex { position: [1.0, 1.0, 0.0], tex_coords: [0.0625, 0.0] },
+        ],
+        [
+            Vertex { position: [1.0, 0.0, -1.0], tex_coords: [0.0, 0.0625] }, // 2
+            Vertex { position: [0.0, 0.0, -1.0], tex_coords: [0.0625, 0.0625] },
+            Vertex { position: [1.0, 1.0, -1.0], tex_coords: [0.0, 0.0] },
+            Vertex { position: [0.0, 1.0, -1.0], tex_coords: [0.0625, 0.0] },
+        ],
+        [
+            Vertex { position: [0.0, 1.0, 0.0], tex_coords: [0.0, 0.0625] }, // 5
+            Vertex { position: [1.0, 1.0, 0.0], tex_coords: [0.0625, 0.0625] },
+            Vertex { position: [0.0, 1.0, -1.0], tex_coords: [0.0, 0.0] },
+            Vertex { position: [1.0, 1.0, -1.0], tex_coords: [0.0625, 0.0] },
+        ],
+        [
+            Vertex { position: [0.0, 0.0, -1.0], tex_coords: [0.0, 0.0625] }, // 4
+            Vertex { position: [1.0, 0.0, -1.0], tex_coords: [0.0625, 0.0625] },
+            Vertex { position: [0.0, 0.0, 0.0], tex_coords: [0.0, 0.0] },
+            Vertex { position: [1.0, 0.0, 0.0], tex_coords: [0.0625, 0.0] },
+        ],
     ];
 
-    pub const INDICES: &'static [u16] = &[
+    pub const FACE_INDICES: [u32; 6] = [
         0, 1, 2,
         1, 3, 2,
-
-        // 4, 5, 6,
-        // 5, 7, 6,
-
-        // 8, 9, 10,
-        // 9, 11, 10,
-
-        // 12, 13, 14,
-        // 13, 15, 14,
-
-        // 16, 17, 18,
-        // 17, 19, 18,
-
-        // 20, 21, 22,
-        // 21, 23, 22,
     ];
 
     #[inline]
