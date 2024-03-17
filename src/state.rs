@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 
 use cgmath::{Point3, Rotation3};
 use winit::{raw_window_handle::HasWindowHandle, window::Window};
-use crate::{block::{Bitmap, Block, Material}, chunk::{Chunk, World, WORLD_SIZE}, vertex::{Vertex, VertexPacked}};
+use crate::{block::{Bitmap, Block, Material}, chunk::{Chunk, World, WORLD_SIZE}, egui_renderer::EguiRenderer, vertex::{Vertex, VertexPacked}};
 use wgpu::util::DeviceExt;
 
 pub struct State {
@@ -24,6 +24,12 @@ pub struct State {
     pub depth_texture: crate::texture::Texture,
     pub vertex_array: Vec<VertexPacked>,
     pub index_array: Vec<u32>,
+    pub egui_renderer: EguiRenderer,
+    pub blocks: usize,
+    pub vertices: usize,
+    pub memory_usage: usize,
+    pub shader: wgpu::ShaderModule,
+    pub render_pipeline_layout: wgpu::PipelineLayout,
 }
 
 impl State {
@@ -107,15 +113,8 @@ impl State {
             blocks += chunk.blocks.iter().filter(|p| p.material != Material::Air).count();
             index_offset = chunk.push_vertex_data(&mut vertex_array, &mut index_array, index_offset);
         }
-        println!(
-r"memory usage: {:.2} MiB
-vertices: {},
-indices: {},
-blocks: {}
-",      (vertex_array.len() * std::mem::size_of::<VertexPacked>() + index_array.len() * std::mem::size_of::<u32>()) as f32 / 1_048_576.0,
-        vertex_array.len(),
-        index_array.len(),
-        blocks);
+        let memory_usage = vertex_array.len() * std::mem::size_of::<VertexPacked>() + index_array.len() * std::mem::size_of::<u32>();
+        let vertices = vertex_array.len();
 
         let diffuse_bytes = include_bytes!("textures/texture_atlas.png");
         let texture = crate::texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "texture").unwrap();
@@ -218,9 +217,7 @@ blocks: {}
             vertex: wgpu::VertexState {
                 module: &shader,
                 buffers: &[
-                    // Vertex::desc(),
                     VertexPacked::desc(),
-                    //crate::instance::InstanceRaw::desc(),
                 ],
                 entry_point: "vs_main"
             },
@@ -270,12 +267,14 @@ blocks: {}
         });
 
 
-        let camera_controller = crate::camera::CameraController::new(10.0);
+        let camera_controller = crate::camera::CameraController::new(1.0);
 
-        Self { config, device, queue, render_pipeline, size, surface, window, vertex_buffer, index_buffer, diffuse_bind_group, camera, camera_bind_group, camera_controller, camera_uniform, camera_buffer, depth_texture, vertex_array, index_array }
+        let egui_renderer = EguiRenderer::new(&window, &config, &device);
+
+        Self { config, device, queue, render_pipeline, size, surface, window, vertex_buffer, index_buffer, diffuse_bind_group, camera, camera_bind_group, camera_controller, camera_uniform, camera_buffer, depth_texture, vertex_array, index_array, egui_renderer, blocks, vertices, memory_usage, shader, render_pipeline_layout }
     }
 
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(&mut self, render_time: std::time::Duration, update_time: std::time::Duration) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -320,6 +319,16 @@ blocks: {}
             // render_pass.draw(0..VERTICES.len() as u32, 0..1);
         }
 
+        let screen_descriptor = egui_wgpu::renderer::ScreenDescriptor {
+            size_in_pixels: [self.config.width, self.config.height],
+            pixels_per_point: self.window.scale_factor() as f32
+        };
+
+        self.egui_renderer.draw(&self.device, &self.queue, &mut encoder, &self.window, &view, screen_descriptor, |ctx| {
+            let gui = crate::gui::Gui { position: self.camera.eye.into(), direction: self.camera.direction.into(), render_time, update_time, blocks: self.blocks, vertices: self.vertices, memory_usage: self.memory_usage };
+            gui.ui(ctx);
+        });
+
         self.queue.submit(std::iter::once(encoder.finish()));
         self.window.pre_present_notify();
         output.present();
@@ -335,5 +344,50 @@ blocks: {}
         self.camera_controller.update_camera(&mut self.camera, dt);
         self.camera_uniform.update_view_projection(&self.camera);
         self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[self.camera_uniform]));
+
+        let polygon_mode = if self.camera_controller.controls.f1_toggled { wgpu::PolygonMode::Line } else { wgpu::PolygonMode::Fill };
+
+        self.render_pipeline = self.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("render pipeline"),
+            layout: Some(&self.render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &self.shader,
+                buffers: &[
+                    VertexPacked::desc(),
+                ],
+                entry_point: "vs_main"
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &self.shader,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: self.config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL
+                })]
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                unclipped_depth: false,
+                polygon_mode,
+                conservative: false
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: crate::texture::Texture::DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false
+            },
+            multiview: None
+        });
     }
 }

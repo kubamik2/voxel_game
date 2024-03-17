@@ -68,6 +68,7 @@ pub struct Controls {
     pub right_pressed: bool,
     pub up_pressed: bool,
     pub down_pressed: bool,
+    pub f1_toggled: bool,
 }
 
 pub struct CameraController {
@@ -94,6 +95,7 @@ impl CameraController {
                     KeyCode::KeyD => { self.controls.right_pressed = pressed },
                     KeyCode::Space => { self.controls.up_pressed = pressed },
                     KeyCode::ShiftLeft => { self.controls.down_pressed = pressed },
+                    KeyCode::F1 if pressed => { self.controls.f1_toggled = !self.controls.f1_toggled }
                     _ => ()
                 }
             }

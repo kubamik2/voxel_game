@@ -9,42 +9,81 @@ pub struct Block {
 }
 
 impl Block {
+    // pub const FACE_VERTICES: [[Vertex; 4]; 6] = [
+    //     [
+    //         Vertex { position: [1.0, 0.0, 0.0], tex_coords: [0, 16], tile: [1, 1] }, // 1
+    //         Vertex { position: [1.0, 0.0, -1.0], tex_coords: [16, 16], tile: [1, 1] },
+    //         Vertex { position: [1.0, 1.0, 0.0], tex_coords: [0, 0], tile: [1, 1] },
+    //         Vertex { position: [1.0, 1.0, -1.0], tex_coords: [16, 0], tile: [1, 1] },
+    //     ],
+    //     [
+    //         Vertex { position: [0.0, 0.0, -1.0], tex_coords: [0, 16], tile: [1, 1] }, // 3
+    //         Vertex { position: [0.0, 0.0, 0.0], tex_coords: [16, 16], tile: [1, 1] },
+    //         Vertex { position: [0.0, 1.0, -1.0], tex_coords: [0, 0], tile: [1, 1] },
+    //         Vertex { position: [0.0, 1.0, 0.0], tex_coords: [16, 0], tile: [1, 1] },
+    //     ],
+    //     [
+    //         Vertex { position: [0.0, 0.0, 0.0], tex_coords: [0, 16], tile: [1, 1] }, // 0
+    //         Vertex { position: [1.0, 0.0, 0.0], tex_coords: [16, 16], tile: [1, 1] },
+    //         Vertex { position: [0.0, 1.0, 0.0], tex_coords: [0, 0], tile: [1, 1] },
+    //         Vertex { position: [1.0, 1.0, 0.0], tex_coords: [16, 0], tile: [1, 1] },
+    //     ],
+    //     [
+    //         Vertex { position: [1.0, 0.0, -1.0], tex_coords: [0, 16], tile: [1, 1] }, // 2
+    //         Vertex { position: [0.0, 0.0, -1.0], tex_coords: [16, 16], tile: [1, 1] },
+    //         Vertex { position: [1.0, 1.0, -1.0], tex_coords: [0, 0], tile: [1, 1] },
+    //         Vertex { position: [0.0, 1.0, -1.0], tex_coords: [16, 0], tile: [1, 1] },
+    //     ],
+    //     [
+    //         Vertex { position: [0.0, 1.0, 0.0], tex_coords: [0, 16], tile: [1, 1] }, // 5
+    //         Vertex { position: [1.0, 1.0, 0.0], tex_coords: [16, 16], tile: [1, 1] },
+    //         Vertex { position: [0.0, 1.0, -1.0], tex_coords: [0, 0], tile: [1, 1] },
+    //         Vertex { position: [1.0, 1.0, -1.0], tex_coords: [16, 0], tile: [1, 1] },
+    //     ],
+    //     [
+    //         Vertex { position: [0.0, 0.0, -1.0], tex_coords: [0, 16], tile: [1, 1] }, // 4
+    //         Vertex { position: [1.0, 0.0, -1.0], tex_coords: [16, 16], tile: [1, 1] },
+    //         Vertex { position: [0.0, 0.0, 0.0], tex_coords: [0, 0], tile: [1, 1] },
+    //         Vertex { position: [1.0, 0.0, 0.0], tex_coords: [16, 0], tile: [1, 1] },
+    //     ],
+    // ];
+
     pub const FACE_VERTICES: [[Vertex; 4]; 6] = [
         [
-            Vertex { position: [1.0, 0.0, 0.0], tex_coords: [0, 16], tile: [1, 1] }, // 1
-            Vertex { position: [1.0, 0.0, -1.0], tex_coords: [16, 16], tile: [1, 1] },
-            Vertex { position: [1.0, 1.0, 0.0], tex_coords: [0, 0], tile: [1, 1] },
-            Vertex { position: [1.0, 1.0, -1.0], tex_coords: [16, 0], tile: [1, 1] },
+            Vertex { position: [0.5, -0.5, 0.5], tex_coords: [0, 16], tile: [1, 1] }, // 1
+            Vertex { position: [0.5, -0.5, -0.5], tex_coords: [16, 16], tile: [1, 1] },
+            Vertex { position: [0.5, 0.5, 0.5], tex_coords: [0, 0], tile: [1, 1] },
+            Vertex { position: [0.5, 0.5, -0.5], tex_coords: [16, 0], tile: [1, 1] },
         ],
         [
-            Vertex { position: [0.0, 0.0, -1.0], tex_coords: [0, 16], tile: [1, 1] }, // 3
-            Vertex { position: [0.0, 0.0, 0.0], tex_coords: [16, 16], tile: [1, 1] },
-            Vertex { position: [0.0, 1.0, -1.0], tex_coords: [0, 0], tile: [1, 1] },
-            Vertex { position: [0.0, 1.0, 0.0], tex_coords: [16, 0], tile: [1, 1] },
+            Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [0, 16], tile: [1, 1] }, // 3
+            Vertex { position: [-0.5, -0.5, 0.5], tex_coords: [16, 16], tile: [1, 1] },
+            Vertex { position: [-0.5, 0.5, -0.5], tex_coords: [0, 0], tile: [1, 1] },
+            Vertex { position: [-0.5, 0.5, 0.5], tex_coords: [16, 0], tile: [1, 1] },
         ],
         [
-            Vertex { position: [0.0, 0.0, 0.0], tex_coords: [0, 16], tile: [1, 1] }, // 0
-            Vertex { position: [1.0, 0.0, 0.0], tex_coords: [16, 16], tile: [1, 1] },
-            Vertex { position: [0.0, 1.0, 0.0], tex_coords: [0, 0], tile: [1, 1] },
-            Vertex { position: [1.0, 1.0, 0.0], tex_coords: [16, 0], tile: [1, 1] },
+            Vertex { position: [-0.5, -0.5, 0.5], tex_coords: [0, 16], tile: [1, 1] }, // 0
+            Vertex { position: [0.5, -0.5, 0.5], tex_coords: [16, 16], tile: [1, 1] },
+            Vertex { position: [-0.5, 0.5, 0.5], tex_coords: [0, 0], tile: [1, 1] },
+            Vertex { position: [0.5, 0.5, 0.5], tex_coords: [16, 0], tile: [1, 1] },
         ],
         [
-            Vertex { position: [1.0, 0.0, -1.0], tex_coords: [0, 16], tile: [1, 1] }, // 2
-            Vertex { position: [0.0, 0.0, -1.0], tex_coords: [16, 16], tile: [1, 1] },
-            Vertex { position: [1.0, 1.0, -1.0], tex_coords: [0, 0], tile: [1, 1] },
-            Vertex { position: [0.0, 1.0, -1.0], tex_coords: [16, 0], tile: [1, 1] },
+            Vertex { position: [0.5, -0.5, -0.5], tex_coords: [0, 16], tile: [1, 1] }, // 2
+            Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [16, 16], tile: [1, 1] },
+            Vertex { position: [0.5, 0.5, -0.5], tex_coords: [0, 0], tile: [1, 1] },
+            Vertex { position: [-0.5, 0.5, -0.5], tex_coords: [16, 0], tile: [1, 1] },
         ],
         [
-            Vertex { position: [0.0, 1.0, 0.0], tex_coords: [0, 16], tile: [1, 1] }, // 5
-            Vertex { position: [1.0, 1.0, 0.0], tex_coords: [16, 16], tile: [1, 1] },
-            Vertex { position: [0.0, 1.0, -1.0], tex_coords: [0, 0], tile: [1, 1] },
-            Vertex { position: [1.0, 1.0, -1.0], tex_coords: [16, 0], tile: [1, 1] },
+            Vertex { position: [-0.5, 0.5, 0.5], tex_coords: [0, 16], tile: [1, 1] }, // 5
+            Vertex { position: [0.5, 0.5, 0.5], tex_coords: [16, 16], tile: [1, 1] },
+            Vertex { position: [-0.5, 0.5, -0.5], tex_coords: [0, 0], tile: [1, 1] },
+            Vertex { position: [0.5, 0.5, -0.5], tex_coords: [16, 0], tile: [1, 1] },
         ],
         [
-            Vertex { position: [0.0, 0.0, -1.0], tex_coords: [0, 16], tile: [1, 1] }, // 4
-            Vertex { position: [1.0, 0.0, -1.0], tex_coords: [16, 16], tile: [1, 1] },
-            Vertex { position: [0.0, 0.0, 0.0], tex_coords: [0, 0], tile: [1, 1] },
-            Vertex { position: [1.0, 0.0, 0.0], tex_coords: [16, 0], tile: [1, 1] },
+            Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [0, 16], tile: [1, 1] }, // 4
+            Vertex { position: [0.5, -0.5, -0.5], tex_coords: [16, 16], tile: [1, 1] },
+            Vertex { position: [-0.5, -0.5, 0.5], tex_coords: [0, 0], tile: [1, 1] },
+            Vertex { position: [0.5, -0.5, 0.5], tex_coords: [16, 0], tile: [1, 1] },
         ],
     ];
 

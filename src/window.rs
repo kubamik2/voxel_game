@@ -30,9 +30,9 @@ pub fn run() {
                         state.update(last_render_time.as_secs_f32());
                         let update_time = now.elapsed();
                     
-                        state.render();
+                        state.render(last_render_time, update_time);
                         let render_time = now.elapsed() - update_time;
-                        println!("update_time: {:?}\nrender_time: {:?}\n", update_time, render_time);
+                        //println!("update_time: {:?}\nrender_time: {:?}\n", update_time, render_time);
                         last_render_time = now.elapsed();
                     }
                     _ => ()

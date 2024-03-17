@@ -35,6 +35,7 @@ impl Chunk {
                         vertex.tex_coords[0] += texture_offsets[i].x;
                         vertex.tex_coords[1] += texture_offsets[i].y;
 
+
                         vertex_array.push(vertex.pack());
                     }
     
@@ -49,7 +50,6 @@ impl Chunk {
 
         index_offset
     }
-
     
     pub fn bake(&mut self) {
         for y in 0..CHUNK_HEIGHT {
@@ -90,7 +90,7 @@ impl Chunk {
     }
 }
 
-pub const WORLD_SIZE: usize = 24;
+pub const WORLD_SIZE: usize = 8;
 
 pub struct World {
     pub chunks: Vec<Chunk>
@@ -123,13 +123,13 @@ impl World {
                 for y in 0..CHUNK_HEIGHT {
                     for z in 0..CHUNK_SIZE {
                         for x in 0..CHUNK_SIZE {
-                            let material = if rng.gen() { Material::Grass } else { Material::Air };
+                            let material = if true { Material::Grass } else { Material::Air };
                             blocks.push(Block { position: cgmath::Point3::new(x as f32 + ix * CHUNK_SIZE as f32, y as f32, z as f32 + iz * CHUNK_SIZE as f32), bitmap: crate::block::Bitmap(0), material });
                         }
                     }
                 }
-    
-                chunks.push(Chunk { blocks });
+                let mut chunk = Chunk { blocks };
+                chunks.push(chunk);
             }
         }
 
