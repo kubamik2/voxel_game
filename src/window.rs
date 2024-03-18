@@ -30,9 +30,7 @@ pub fn run() {
                         state.update(last_render_time.as_secs_f32());
                         let update_time = now.elapsed();
                     
-                        state.render(last_render_time, update_time);
-                        let render_time = now.elapsed() - update_time;
-                        //println!("update_time: {:?}\nrender_time: {:?}\n", update_time, render_time);
+                        state.render();
                         last_render_time = now.elapsed();
                     }
                     _ => ()
@@ -43,7 +41,7 @@ pub fn run() {
             },
             Event::DeviceEvent { event, .. } => {
                 if let DeviceEvent::MouseMotion { delta } = event {
-                    state.camera_controller.mouse_move(delta.0 as f32, delta.1 as f32, &mut state.camera);
+                    state.world.camera_controller.mouse_move(delta.0 as f32, delta.1 as f32, &mut state.world.camera);
                     state.window.set_cursor_position(winit::dpi::LogicalPosition::new(0.0, 0.0));
                 }
             }

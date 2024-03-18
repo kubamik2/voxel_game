@@ -1,158 +1,63 @@
-
 use cgmath::Point3;
-use crate::vertex::{Vertex, VertexPacked};
 
+use crate::block_vertex::*;
+
+#[derive(Debug, Clone, Copy)]
 pub struct Block {
-    pub position: Point3<f32>,
     pub material: Material,
-    pub bitmap: Bitmap
 }
 
 impl Block {
-    // pub const FACE_VERTICES: [[Vertex; 4]; 6] = [
-    //     [
-    //         Vertex { position: [1.0, 0.0, 0.0], tex_coords: [0, 16], tile: [1, 1] }, // 1
-    //         Vertex { position: [1.0, 0.0, -1.0], tex_coords: [16, 16], tile: [1, 1] },
-    //         Vertex { position: [1.0, 1.0, 0.0], tex_coords: [0, 0], tile: [1, 1] },
-    //         Vertex { position: [1.0, 1.0, -1.0], tex_coords: [16, 0], tile: [1, 1] },
-    //     ],
-    //     [
-    //         Vertex { position: [0.0, 0.0, -1.0], tex_coords: [0, 16], tile: [1, 1] }, // 3
-    //         Vertex { position: [0.0, 0.0, 0.0], tex_coords: [16, 16], tile: [1, 1] },
-    //         Vertex { position: [0.0, 1.0, -1.0], tex_coords: [0, 0], tile: [1, 1] },
-    //         Vertex { position: [0.0, 1.0, 0.0], tex_coords: [16, 0], tile: [1, 1] },
-    //     ],
-    //     [
-    //         Vertex { position: [0.0, 0.0, 0.0], tex_coords: [0, 16], tile: [1, 1] }, // 0
-    //         Vertex { position: [1.0, 0.0, 0.0], tex_coords: [16, 16], tile: [1, 1] },
-    //         Vertex { position: [0.0, 1.0, 0.0], tex_coords: [0, 0], tile: [1, 1] },
-    //         Vertex { position: [1.0, 1.0, 0.0], tex_coords: [16, 0], tile: [1, 1] },
-    //     ],
-    //     [
-    //         Vertex { position: [1.0, 0.0, -1.0], tex_coords: [0, 16], tile: [1, 1] }, // 2
-    //         Vertex { position: [0.0, 0.0, -1.0], tex_coords: [16, 16], tile: [1, 1] },
-    //         Vertex { position: [1.0, 1.0, -1.0], tex_coords: [0, 0], tile: [1, 1] },
-    //         Vertex { position: [0.0, 1.0, -1.0], tex_coords: [16, 0], tile: [1, 1] },
-    //     ],
-    //     [
-    //         Vertex { position: [0.0, 1.0, 0.0], tex_coords: [0, 16], tile: [1, 1] }, // 5
-    //         Vertex { position: [1.0, 1.0, 0.0], tex_coords: [16, 16], tile: [1, 1] },
-    //         Vertex { position: [0.0, 1.0, -1.0], tex_coords: [0, 0], tile: [1, 1] },
-    //         Vertex { position: [1.0, 1.0, -1.0], tex_coords: [16, 0], tile: [1, 1] },
-    //     ],
-    //     [
-    //         Vertex { position: [0.0, 0.0, -1.0], tex_coords: [0, 16], tile: [1, 1] }, // 4
-    //         Vertex { position: [1.0, 0.0, -1.0], tex_coords: [16, 16], tile: [1, 1] },
-    //         Vertex { position: [0.0, 0.0, 0.0], tex_coords: [0, 0], tile: [1, 1] },
-    //         Vertex { position: [1.0, 0.0, 0.0], tex_coords: [16, 0], tile: [1, 1] },
-    //     ],
-    // ];
-
-    pub const FACE_VERTICES: [[Vertex; 4]; 6] = [
+    pub const FACE_VERTICES: [[BlockVertex; 4]; 6] = [
         [
-            Vertex { position: [0.5, -0.5, 0.5], tex_coords: [0, 16], tile: [1, 1] }, // 1
-            Vertex { position: [0.5, -0.5, -0.5], tex_coords: [16, 16], tile: [1, 1] },
-            Vertex { position: [0.5, 0.5, 0.5], tex_coords: [0, 0], tile: [1, 1] },
-            Vertex { position: [0.5, 0.5, -0.5], tex_coords: [16, 0], tile: [1, 1] },
+            BlockVertex { position: Point3::new(1, 0, 1), face: Face::PositiveX },
+            BlockVertex { position: Point3::new(1, 0, 0), face: Face::PositiveX },
+            BlockVertex { position: Point3::new(1, 1, 1), face: Face::PositiveX },
+            BlockVertex { position: Point3::new(1, 1, 0), face: Face::PositiveX },
         ],
         [
-            Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [0, 16], tile: [1, 1] }, // 3
-            Vertex { position: [-0.5, -0.5, 0.5], tex_coords: [16, 16], tile: [1, 1] },
-            Vertex { position: [-0.5, 0.5, -0.5], tex_coords: [0, 0], tile: [1, 1] },
-            Vertex { position: [-0.5, 0.5, 0.5], tex_coords: [16, 0], tile: [1, 1] },
+            BlockVertex { position: Point3::new(0, 0, 0), face: Face::NegativeX },
+            BlockVertex { position: Point3::new(0, 0, 1), face: Face::NegativeX },
+            BlockVertex { position: Point3::new(0, 1, 0), face: Face::NegativeX },
+            BlockVertex { position: Point3::new(0, 1, 1), face: Face::NegativeX },
         ],
         [
-            Vertex { position: [-0.5, -0.5, 0.5], tex_coords: [0, 16], tile: [1, 1] }, // 0
-            Vertex { position: [0.5, -0.5, 0.5], tex_coords: [16, 16], tile: [1, 1] },
-            Vertex { position: [-0.5, 0.5, 0.5], tex_coords: [0, 0], tile: [1, 1] },
-            Vertex { position: [0.5, 0.5, 0.5], tex_coords: [16, 0], tile: [1, 1] },
+            BlockVertex { position: Point3::new(0, 0, 1), face: Face::PositiveZ },
+            BlockVertex { position: Point3::new(1, 0, 1), face: Face::PositiveZ },
+            BlockVertex { position: Point3::new(0, 1, 1), face: Face::PositiveZ },
+            BlockVertex { position: Point3::new(1, 1, 1), face: Face::PositiveZ },
         ],
         [
-            Vertex { position: [0.5, -0.5, -0.5], tex_coords: [0, 16], tile: [1, 1] }, // 2
-            Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [16, 16], tile: [1, 1] },
-            Vertex { position: [0.5, 0.5, -0.5], tex_coords: [0, 0], tile: [1, 1] },
-            Vertex { position: [-0.5, 0.5, -0.5], tex_coords: [16, 0], tile: [1, 1] },
+            BlockVertex { position: Point3::new(1, 0, 0), face: Face::NegativeZ },
+            BlockVertex { position: Point3::new(0, 0, 0), face: Face::NegativeZ },
+            BlockVertex { position: Point3::new(1, 1, 0), face: Face::NegativeZ },
+            BlockVertex { position: Point3::new(0, 1, 0), face: Face::NegativeZ },
         ],
         [
-            Vertex { position: [-0.5, 0.5, 0.5], tex_coords: [0, 16], tile: [1, 1] }, // 5
-            Vertex { position: [0.5, 0.5, 0.5], tex_coords: [16, 16], tile: [1, 1] },
-            Vertex { position: [-0.5, 0.5, -0.5], tex_coords: [0, 0], tile: [1, 1] },
-            Vertex { position: [0.5, 0.5, -0.5], tex_coords: [16, 0], tile: [1, 1] },
+            BlockVertex { position: Point3::new(0, 1, 0), face: Face::PositiveY },
+            BlockVertex { position: Point3::new(0, 1, 1), face: Face::PositiveY },
+            BlockVertex { position: Point3::new(1, 1, 0), face: Face::PositiveY },
+            BlockVertex { position: Point3::new(1, 1, 1), face: Face::PositiveY },
         ],
         [
-            Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [0, 16], tile: [1, 1] }, // 4
-            Vertex { position: [0.5, -0.5, -0.5], tex_coords: [16, 16], tile: [1, 1] },
-            Vertex { position: [-0.5, -0.5, 0.5], tex_coords: [0, 0], tile: [1, 1] },
-            Vertex { position: [0.5, -0.5, 0.5], tex_coords: [16, 0], tile: [1, 1] },
+            BlockVertex { position: Point3::new(1, 0, 0), face: Face::NegativeY },
+            BlockVertex { position: Point3::new(1, 0, 1), face: Face::NegativeY },
+            BlockVertex { position: Point3::new(0, 0, 0), face: Face::NegativeY },
+            BlockVertex { position: Point3::new(0, 0, 1), face: Face::NegativeY },
         ],
     ];
 
     pub const FACE_INDICES: [u32; 6] = [
-        0, 1, 2,
-        1, 3, 2,
+        2, 0, 1,
+        3, 2, 1
     ];
-
-    #[inline]
-    pub fn positive_x_occupied(&self) -> bool {
-        self.bitmap.get(0)
-    }
-
-    #[inline]
-    pub fn negative_x_occupied(&self) -> bool {
-        self.bitmap.get(1)
-    }
-
-    #[inline]
-    pub fn positive_z_occupied(&self) -> bool {
-        self.bitmap.get(2)
-    }
-
-    #[inline]
-    pub fn negative_z_occupied(&self) -> bool {
-        self.bitmap.get(3)
-    }
-
-    #[inline]
-    pub fn positive_y_occupied(&self) -> bool {
-        self.bitmap.get(4)
-    }
-
-    #[inline]
-    pub fn negative_y_occupied(&self) -> bool {
-        self.bitmap.get(5)
-    }
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Material {
-    Cobblestone,
     Air,
+    Cobblestone,
     Dirt,
     Grass,
-}
-
-impl Material {
-    pub fn texture_offsets(&self) -> [cgmath::Vector2<u8>; 6]{
-        match *self {
-            Self::Air => [(0, 0).into(); 6],
-            Self::Cobblestone => [(0, 0).into(); 6],
-            Self::Dirt => [(16, 0).into(); 6],
-            Self::Grass => [(2 * 16, 0).into(), (2 * 16, 0).into(), (2 * 16, 0).into(), (2 * 16, 0).into(), (3 * 16, 0).into(), (16, 0).into()]
-        }
-    }
-}
-
-pub struct Bitmap(pub u8);
-
-impl Bitmap {
-    #[inline]
-    pub fn get(&self, index: usize) -> bool {
-        (self.0 & (1 << index)) > 0
-    }
-
-    #[inline]
-    pub fn set(&mut self, index: usize, value: bool) {
-        let mask = !(1 << index);
-        self.0 = self.0 & mask | ((value as u8) << index);
-    }
 }
