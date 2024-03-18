@@ -1,6 +1,7 @@
 use cgmath::Point3;
 use wgpu::vertex_attr_array;
 
+#[derive(Debug, Clone, Copy)]
 pub struct BlockVertex {
     pub position: Point3<u8>,
     pub face: Face,
@@ -43,6 +44,22 @@ impl PackedBlockVertex {
             array_stride: std::mem::size_of::<PackedBlockVertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: Self::ATTRIBUTES,
+        }
+    }
+}
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
+pub struct VertexConstant {
+    pub chunk_translation_offset: [i32; 3],
+}
+
+impl VertexConstant {
+    const ATTRIBUTES: &'static [wgpu::VertexAttribute] = &vertex_attr_array![1 => Sint32x3];
+    pub fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<[i32; 3]>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: Self::ATTRIBUTES
         }
     }
 }

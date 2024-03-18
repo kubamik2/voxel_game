@@ -7,6 +7,7 @@ struct VertexOutput {
 
 struct VertexInput {
     @location(0) packed_vertex_data: u32,
+    @location(1) chunk_translation: vec3i,
 }
 
 struct CameraUniform {
@@ -35,7 +36,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
     let face = in.packed_vertex_data >> 18u;
 
-    out.clip_position = camera.view_projection * vec4f(position, 1.0);
+    out.clip_position = camera.view_projection * vec4f(position.x + f32(in.chunk_translation.x), position.y + f32(in.chunk_translation.y), position.z + f32(in.chunk_translation.z), 1.0);
 
     out.position = position;
     out.face = face;

@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 
 use cgmath::{Point3, Rotation3};
 use winit::{raw_window_handle::HasWindowHandle, window::Window};
-use crate::{chunk::{Chunk, World}, egui_renderer::EguiRenderer};
+use crate::{block::Material, chunk::{Chunk, World}, egui_renderer::EguiRenderer};
 use wgpu::util::DeviceExt;
 
 pub struct State {
@@ -60,17 +60,20 @@ impl State {
         surface.configure(&device, &config);
 
 
-        
+        let mut blocks = 0;
         let mut world = World::new(&device, &config, &queue);
-        let mut chunk = Chunk::new();
-        chunk[(0, 0, 0)].material = crate::block::Material::Air;
-        chunk[(0, 0, 1)].material = crate::block::Material::Cobblestone;
-        chunk[(0, 1, 0)].material = crate::block::Material::Dirt;
-        chunk[(0, 1, 1)].material = crate::block::Material::Grass;
-        chunk.load_subchunk(0, &device, &queue);
-        
-        world.loaded_chunks.chunks.insert(0, chunk);
-        
+        for x in 0..2 {
+            for z in 0..2 {
+                let mut chunk = Chunk::randomized((x, z).into());
+                blocks += chunk.blocks.iter().filter(|p| p.material != Material::Air).count();
+                for i in 0..8 {
+                    chunk.load_subchunk(i, &device, &queue);
+                }
+
+                world.loaded_chunks.chunks.insert(x as u64 | (z as u64) << 32, chunk);
+            }
+        }
+        dbg!(blocks);
         Self { window, device, config, queue, size, surface, world }
     }
 

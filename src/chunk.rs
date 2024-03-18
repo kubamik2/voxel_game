@@ -1,8 +1,9 @@
 use cgmath::{Point2, Point3};
+use rand::Rng;
 use wgpu::util::DeviceExt;
 use std::{collections::HashMap, ops::{Index, IndexMut}};
 
-use crate::{block::*, camera::*};
+use crate::{block::*, block_vertex::VertexConstant, camera::*};
 
 pub struct ChunkManager {
     pub chunks: HashMap<u64, Chunk>,
@@ -152,7 +153,7 @@ impl World {
             bind_group_layouts: &[
                 &texture_atlas_bind_group_layout,
                 &camera_bind_group_layout,
-                &material_texture_bind_group_layout
+                &material_texture_bind_group_layout,
             ],
             push_constant_ranges: &[]
         });
@@ -165,6 +166,7 @@ impl World {
                 module: &shader,
                 buffers: &[
                     crate::block_vertex::PackedBlockVertex::desc(),
+                    VertexConstant::desc(),
                 ],
                 entry_point: "vs_main"
             },
@@ -243,13 +245,15 @@ impl World {
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
 
             for chunk in self.loaded_chunks.chunks.values() {
-                
                 for sub_chunk in chunk.sub_chunks.iter() {
                     if let Some(sub_chunk) = sub_chunk {
                         render_pass.set_vertex_buffer(0, sub_chunk.mesh.vertex_buffer.slice(..));
-                        render_pass.set_index_buffer(sub_chunk.mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                        render_pass.set_bind_group(2, &sub_chunk.material_3d_texture_bind_group, &[]);
+                        render_pass.set_vertex_buffer(1, sub_chunk.translation_buffer.slice(..));
 
+                        render_pass.set_index_buffer(sub_chunk.mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+
+                        render_pass.set_bind_group(2, &sub_chunk.material_3d_texture_bind_group, &[]);
+                        
                         render_pass.draw_indexed(0..sub_chunk.mesh.indices, 0, 0..1);
                     }
                 }
@@ -262,9 +266,9 @@ impl World {
     }
 }
 
-pub const CHUNK_SIZE: usize = 2;
+pub const CHUNK_SIZE: usize = 32;
 pub const CHUNK_HEIGHT: usize = 256;
-pub const SUB_CHUNK_HEIGHT: usize = 2;
+pub const SUB_CHUNK_HEIGHT: usize = 32;
 
 pub struct Chunk {
     pub position: Point2<i32>,
@@ -303,10 +307,11 @@ impl Chunk {
                     i += 1;
                     if block.material == Material::Air { continue; }
                     
-                    for face in Block::FACE_VERTICES {
+                    for (i, face) in Block::FACE_VERTICES.iter().cloned().enumerate() {
+                        if !self.is_face_visible(i, x, y, z) { continue; }
                         for mut vertex in face {
                             vertex.position.x += x as u8;
-                            vertex.position.y += y as u8;
+                            vertex.position.y += (y - y_offset) as u8;
                             vertex.position.z += z as u8;
 
                             vertices.push(vertex.pack());
@@ -371,22 +376,97 @@ impl Chunk {
             ]
         });
 
-        self.sub_chunks[index] = Some(SubChunk { y_offset: y_offset as u32, mesh: ChunkMesh { vertex_buffer, index_buffer, indices: indices.len() as u32 }, material_3d_texture_bind_group: bind_group})
+        let translation_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("chunk_translation_buffer"),
+            usage: wgpu::BufferUsages::VERTEX,
+            contents: bytemuck::cast_slice(&[VertexConstant { chunk_translation_offset: [self.position.x * CHUNK_SIZE as i32, y_offset as i32, self.position.y * CHUNK_SIZE as i32]}])
+        });
+
+        self.sub_chunks[index] = Some(SubChunk { mesh: ChunkMesh { vertex_buffer, index_buffer, indices: indices.len() as u32 }, material_3d_texture_bind_group: bind_group, translation_buffer })
     }
 
-    pub fn new() -> Self {
+    pub fn new(position: Point2<i32>) -> Self {
         Self { 
-            position: (0, 0).into(),
+            position,
             blocks: vec![Block { material: Material::Cobblestone }; CHUNK_SIZE * CHUNK_SIZE * CHUNK_HEIGHT].into_boxed_slice(),
             sub_chunks: [None, None, None, None, None, None, None, None]
+        }
+    }
+
+    pub fn randomized(position: Point2<i32>) -> Self {
+        let mut blocks = vec![];
+
+        let mut rng = rand::thread_rng();
+
+        for _ in 0..CHUNK_SIZE * CHUNK_SIZE * CHUNK_HEIGHT {
+            let material = match rng.gen_range(0..4) {
+                0 => Material::Air,
+                1 => Material::Cobblestone,
+                2 => Material::Dirt,
+                3 => Material::Grass,
+                _ => unreachable!()
+            };
+    
+            blocks.push(Block { material });
+        }
+
+        Self { position, blocks: blocks.into_boxed_slice(), sub_chunks: [None, None, None, None, None, None, None, None] }
+    }
+
+    fn is_face_visible(&self, face_index: usize, x: usize, y: usize, z: usize) -> bool {
+        
+        match face_index {
+            0 => {
+                if x + 1 < CHUNK_SIZE {
+                    self[(x + 1, y, z)].material == Material::Air
+                } else {
+                    true
+                }
+            },
+            1 => {
+                if x > 0 {
+                    self[(x - 1, y, z)].material == Material::Air
+                } else {
+                    true
+                }
+            },
+            2 => {
+                if z + 1 < CHUNK_SIZE {
+                    self[(x, y, z + 1)].material == Material::Air
+                } else {
+                    true
+                }
+            },
+            3 => {
+                if z > 0 {
+                    self[(x, y, z - 1)].material == Material::Air
+                } else {
+                    true
+                }
+            },
+            4 => {
+                if y + 1 < CHUNK_HEIGHT {
+                    self[(x, y + 1, z)].material == Material::Air
+                } else {
+                    true
+                }
+            },
+            5 => {
+                if y > 0 {
+                    self[(x, y - 1, z)].material == Material::Air
+                } else {
+                    true
+                }
+            },
+            _ => unreachable!()
         }
     }
 }
 
 pub struct SubChunk {
-    pub y_offset: u32,
     pub material_3d_texture_bind_group: wgpu::BindGroup,
-    pub mesh: ChunkMesh
+    pub mesh: ChunkMesh,
+    pub translation_buffer: wgpu::Buffer,
 }
 
 pub struct ChunkMesh {
