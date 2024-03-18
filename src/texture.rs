@@ -123,7 +123,7 @@ impl Texture {
             wgpu::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(crate::chunk::CHUNK_SIZE as u32),
-                rows_per_image: Some(crate::chunk::SUB_CHUNK_HEIGHT as u32),
+                rows_per_image: Some(crate::chunk::CHUNK_SIZE as u32),
             },
             size
         );

@@ -29,8 +29,9 @@ pub fn run() {
                         let now = std::time::Instant::now();
                         state.update(last_render_time.as_secs_f32());
                         let update_time = now.elapsed();
-                    
+                        
                         state.render();
+                        println!("render_time: {:?}", last_render_time);
                         last_render_time = now.elapsed();
                     }
                     _ => ()

@@ -60,20 +60,8 @@ impl State {
         surface.configure(&device, &config);
 
 
-        let mut blocks = 0;
         let mut world = World::new(&device, &config, &queue);
-        for x in 0..2 {
-            for z in 0..2 {
-                let mut chunk = Chunk::randomized((x, z).into());
-                blocks += chunk.blocks.iter().filter(|p| p.material != Material::Air).count();
-                for i in 0..8 {
-                    chunk.load_subchunk(i, &device, &queue);
-                }
 
-                world.loaded_chunks.chunks.insert(x as u64 | (z as u64) << 32, chunk);
-            }
-        }
-        dbg!(blocks);
         Self { window, device, config, queue, size, surface, world }
     }
 

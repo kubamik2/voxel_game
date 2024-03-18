@@ -30,8 +30,8 @@ pub enum Face {
 
 
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
-pub struct PackedBlockVertex(u32);
+#[derive(Debug, Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
+pub struct PackedBlockVertex(pub u32);
 
 impl PackedBlockVertex {
     pub fn new(position: Point3<u8>, face: Face) -> Self {
