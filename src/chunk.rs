@@ -5,7 +5,7 @@ use std::{collections::HashMap, io::Write, ops::{Index, IndexMut}};
 
 use crate::{block::*, block_vertex::{BlockVertex, Face, PackedBlockVertex, VertexConstant}, camera::*};
 
-pub const RENDER_DISTANCE: usize = 32;
+pub const RENDER_DISTANCE: usize = 64;
 
 pub struct ChunkRenderer {
     pub chunks: Box<[Chunk]>,
@@ -29,7 +29,8 @@ impl ChunkRenderer {
                 chunks.push(chunk);
             }
         }
-        dbg!(time / 64 / 8);
+        println!("subchunk_creation_time: {:?}", time / (RENDER_DISTANCE as u32 * RENDER_DISTANCE as u32 * 8));
+        println!("world_creation_time: {:?}", time);
 
         Self { chunks: chunks.into_boxed_slice() }
     }
@@ -144,7 +145,7 @@ impl World {
             ]
         });
 
-        let material_texture_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let subchunk_texture_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("3d material texture bind group layout"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
@@ -160,30 +161,13 @@ impl World {
             ]
         });
 
-        let face_visibility_texture_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("face_visibility_texture_bind_group_layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    count: None,
-                    ty: wgpu::BindingType::Texture {
-                        multisampled: false,
-                        sample_type: wgpu::TextureSampleType::Uint,
-                        view_dimension: wgpu::TextureViewDimension::D3
-                    },
-                    visibility: wgpu::ShaderStages::FRAGMENT
-                }
-            ]
-        });
-
         // pipeline layout
         let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("chunk pipeline layout"),
             bind_group_layouts: &[
                 &texture_atlas_bind_group_layout,
                 &camera_bind_group_layout,
-                &material_texture_bind_group_layout,
-                &face_visibility_texture_bind_group_layout
+                &subchunk_texture_bind_group_layout,
             ],
             push_constant_ranges: &[]
         });
@@ -351,8 +335,7 @@ impl World {
                     if let Some(sub_chunk) = sub_chunk {
                         render_pass.set_vertex_buffer(1, sub_chunk.translation_buffer.slice(..));
 
-                        render_pass.set_bind_group(2, &sub_chunk.material_texture, &[]);
-                        render_pass.set_bind_group(3, &sub_chunk.face_visibility_texture, &[]);
+                        render_pass.set_bind_group(2, &sub_chunk.subchunk_texture, &[]);
                         
                         render_pass.draw_indexed(0..self.indices, 0, 0..1);
                     }
@@ -405,6 +388,10 @@ impl IndexMut<(usize, usize, usize)> for Chunk {
     }
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
+pub struct SubChunkData(u32);
+
 impl Chunk {
     pub const CHUNK_VERTICES: [[BlockVertex; 4]; 6] = [
         [
@@ -455,8 +442,7 @@ impl Chunk {
         let y_offset = index * SUB_CHUNK_HEIGHT;
         let mut material_data = [0; SUB_CHUNK_HEIGHT * CHUNK_SIZE * CHUNK_SIZE];
         let mut face_visibility_data = [0; SUB_CHUNK_HEIGHT * CHUNK_SIZE * CHUNK_SIZE];
-
-        
+        let mut subchunk_data = [SubChunkData(0); SUB_CHUNK_HEIGHT * CHUNK_SIZE * CHUNK_SIZE];
 
         let block_index_start = y_offset * CHUNK_SIZE * CHUNK_SIZE;
 
@@ -464,15 +450,16 @@ impl Chunk {
         for y in y_offset..y_offset + SUB_CHUNK_HEIGHT {
             for z in 0..CHUNK_SIZE {
                 for x in 0..CHUNK_SIZE {
-                    material_data[i] = self[(x, y, z)].material as u8;
                     let face_visibility_bitmask = 
                     (self.is_face_visible(0, x, y, z) as u8) | 
                     (self.is_face_visible(1, x, y, z) as u8) << 1 | 
                     (self.is_face_visible(2, x, y, z) as u8) << 2 | 
-                    (self.is_face_visible(3, x, y, z) as u8) << 3| 
-                    (self.is_face_visible(4, x, y, z) as u8) << 4| 
+                    (self.is_face_visible(3, x, y, z) as u8) << 3 | 
+                    (self.is_face_visible(4, x, y, z) as u8) << 4 | 
                     (self.is_face_visible(5, x, y, z) as u8) << 5;
-                    face_visibility_data[i] = face_visibility_bitmask;
+
+                    subchunk_data[i] = SubChunkData(self[(x, y, z)].material as u32 | (face_visibility_bitmask as u32) << 8);
+
                     i += 1;
                 }
             }
@@ -483,9 +470,9 @@ impl Chunk {
         //     i += 1;
         // }
 
-        let material_texture = crate::texture::Texture::create_3d_material_texture(device, queue, &material_data);
-        let material_texture_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("3d material texture bind group layout"),
+        let subchunk_texture = crate::texture::Texture::create_3d_material_texture(device, queue, bytemuck::cast_slice(&subchunk_data));
+        let subchunk_texture_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("subchunk texture bind group layout"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -499,13 +486,13 @@ impl Chunk {
                 },
             ]
         });
-        let material_texture = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let subchunk_texture = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("3d material texture bind group"),
-            layout: &material_texture_bind_group_layout,
+            layout: &subchunk_texture_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&material_texture.view)
+                    resource: wgpu::BindingResource::TextureView(&subchunk_texture.view)
                 },
             ]
         });
@@ -516,35 +503,7 @@ impl Chunk {
             contents: bytemuck::cast_slice(&[VertexConstant { chunk_translation_offset: [self.position.x * CHUNK_SIZE as i32, y_offset as i32, self.position.y * CHUNK_SIZE as i32]}])
         });
 
-        let face_visibility_texture = crate::texture::Texture::create_3d_material_texture(device, queue, &face_visibility_data);
-        let face_visibility_texture_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("face_visibility_texture_bind_group_layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    count: None,
-                    ty: wgpu::BindingType::Texture {
-                        multisampled: false,
-                        sample_type: wgpu::TextureSampleType::Uint,
-                        view_dimension: wgpu::TextureViewDimension::D3
-                    },
-                    visibility: wgpu::ShaderStages::FRAGMENT
-                }
-            ]
-        });
-
-        let face_visibility_texture = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("face_visibility_bind_group"),
-            layout: &face_visibility_texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&face_visibility_texture.view)
-                }
-            ]
-        });
-
-        self.sub_chunks[index] = Some(SubChunk { material_texture, translation_buffer, face_visibility_texture })
+        self.sub_chunks[index] = Some(SubChunk { subchunk_texture, translation_buffer })
     }
 
     pub fn new(position: Point2<i32>) -> Self {
@@ -580,46 +539,22 @@ impl Chunk {
         
         match face_index {
             0 => {
-                if x + 1 < CHUNK_SIZE {
-                    self[(x + 1, y, z)].material == Material::Air
-                } else {
-                    true
-                }
+                !(x + 1 < CHUNK_SIZE) || self[(x + 1, y, z)].material == Material::Air
             },
             1 => {
-                if x > 0 {
-                    self[(x - 1, y, z)].material == Material::Air
-                } else {
-                    true
-                }
+                !(x > 0) || self[(x - 1, y, z)].material == Material::Air
             },
             2 => {
-                if z + 1 < CHUNK_SIZE {
-                    self[(x, y, z + 1)].material == Material::Air
-                } else {
-                    true
-                }
+                !(z + 1 < CHUNK_SIZE) || self[(x, y, z + 1)].material == Material::Air
             },
             3 => {
-                if z > 0 {
-                    self[(x, y, z - 1)].material == Material::Air
-                } else {
-                    true
-                }
+                !(z > 0) || self[(x, y, z - 1)].material == Material::Air
             },
             4 => {
-                if y + 1 < CHUNK_HEIGHT {
-                    self[(x, y + 1, z)].material == Material::Air
-                } else {
-                    true
-                }
+                !(y + 1 < CHUNK_HEIGHT) || self[(x, y + 1, z)].material == Material::Air
             },
             5 => {
-                if y > 0 {
-                    self[(x, y - 1, z)].material == Material::Air
-                } else {
-                    true
-                }
+                !(y > 0) || self[(x, y - 1, z)].material == Material::Air
             },
             _ => unreachable!()
         }
@@ -627,7 +562,6 @@ impl Chunk {
 }
 
 pub struct SubChunk {
-    pub material_texture: wgpu::BindGroup,
-    pub face_visibility_texture: wgpu::BindGroup,
+    pub subchunk_texture: wgpu::BindGroup,
     pub translation_buffer: wgpu::Buffer,
 }

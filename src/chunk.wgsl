@@ -46,9 +46,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 @group(0) @binding(0) var t_diffuse: texture_2d<f32>;
 @group(0) @binding(1) var s_diffuse: sampler;
 
-@group(2) @binding(0) var t_mat: texture_3d<u32>;
-
-@group(3) @binding(0) var f_mat: texture_3d<u32>;
+@group(2) @binding(0) var subchunk_tex: texture_3d<u32>;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
@@ -86,14 +84,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         default: {}
     }
     mat_tex_coords -= vec3u(u32(in.face == 0u), u32(in.face == 2u), u32(in.face == 4u));
-    
-    let face_visibility_bitmask = textureLoad(f_mat, mat_tex_coords, 0i).x;
-    if (1u << in.face & face_visibility_bitmask) == 0u { discard; }
 
-    let material = textureLoad(t_mat, mat_tex_coords, 0i).x;
-    if material == 0u { discard; }
+    let subchunk_data = textureLoad(subchunk_tex, mat_tex_coords, 0i);
+
+    let material = subchunk_data.x & 255u;
+    let face_visibility_bitmask = subchunk_data.x >> 8u;
+
+    if material == 0u || (1u << in.face & face_visibility_bitmask) == 0u { discard; }
+
     tex_coords.x += (f32(material)) * 0.0625;
 
     return textureSample(t_diffuse, s_diffuse, tex_coords);
-    // return vec4f(0.0, 0.0, 0.0, 1.0);
 }

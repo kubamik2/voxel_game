@@ -122,7 +122,7 @@ impl Texture {
             &data,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(crate::chunk::CHUNK_SIZE as u32),
+                bytes_per_row: Some(4 * crate::chunk::CHUNK_SIZE as u32),
                 rows_per_image: Some(crate::chunk::CHUNK_SIZE as u32),
             },
             size
@@ -157,7 +157,7 @@ impl Texture {
             usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
             mip_level_count: 1,
             dimension: wgpu::TextureDimension::D3,
-            format: wgpu::TextureFormat::R8Uint,
+            format: wgpu::TextureFormat::R32Uint,
             sample_count: 1,
             view_formats: &[]
         }
