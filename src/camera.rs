@@ -68,7 +68,7 @@ pub struct Controls {
     pub right_pressed: bool,
     pub up_pressed: bool,
     pub down_pressed: bool,
-    pub f1_toggled: bool,
+    pub lctrl_pressed: bool,
 }
 
 pub struct CameraController {
@@ -80,7 +80,7 @@ impl CameraController {
     pub fn new(speed: f32) -> Self {
         Self {
             speed,
-            controls: Controls::default()
+            controls: Controls::default(),
         }
     }
 
@@ -95,7 +95,7 @@ impl CameraController {
                     KeyCode::KeyD => { self.controls.right_pressed = pressed },
                     KeyCode::Space => { self.controls.up_pressed = pressed },
                     KeyCode::ShiftLeft => { self.controls.down_pressed = pressed },
-                    KeyCode::F1 if pressed => { self.controls.f1_toggled = !self.controls.f1_toggled }
+                    KeyCode::ControlLeft => { self.controls.lctrl_pressed = pressed }
                     _ => ()
                 }
             }
@@ -107,28 +107,31 @@ impl CameraController {
         let forward = Vector3::new(camera.direction.x, 0.0, camera.direction.z).normalize();
         let right = forward.cross(camera.up);
 
+        let speed_modifier = if self.controls.lctrl_pressed { 10.0 } else { 1.0 };
+        let modified_speed = self.speed * speed_modifier;
+
         if self.controls.forward_pressed {
-            camera.eye += self.speed * dt * forward;
+            camera.eye += modified_speed * dt * forward;
         }
 
         if self.controls.backward_pressed {
-            camera.eye -= self.speed * dt * forward;
+            camera.eye -= modified_speed * dt * forward;
         }
         
         if self.controls.right_pressed {
-            camera.eye += self.speed * dt * right;
+            camera.eye += modified_speed * dt * right;
         }
 
         if self.controls.left_pressed {
-            camera.eye -= self.speed * dt * right;
+            camera.eye -= modified_speed * dt * right;
         }
 
         if self.controls.up_pressed {
-            camera.eye.y += self.speed * dt
+            camera.eye.y += modified_speed * dt
         }
 
         if self.controls.down_pressed {
-            camera.eye.y -= self.speed * dt
+            camera.eye.y -= modified_speed * dt
         }
     }
 

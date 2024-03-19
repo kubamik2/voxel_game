@@ -53,50 +53,47 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     var mat_tex_coords = vec3u(
-        u32(floor(in.position.x)),
-        u32(floor(in.position.z)),
-        u32(floor(in.position.y)),
+        u32(in.position.x + 0.00001), // fixes visual glitches on some GPUs, maybe because of float inprecision?
+        u32(in.position.z + 0.00001),
+        u32(in.position.y + 0.00001),
     );
 
-    let tex_x = in.position.x - floor(in.position.x);
-    let tex_y = (1.0 - (in.position.y - floor(in.position.y))) * 0.0625;
-    let tex_z = in.position.z - floor(in.position.z);
+    let tex_x = fract(in.position.x) * 0.0625;
+    let tex_y = (1.0 - fract(in.position.y)) * 0.0625;
+    let tex_z = fract(in.position.z) * 0.0625;
 
     var tex_coords = vec2f();
 
     switch in.face {
         case 0u: {
-            mat_tex_coords.x -= 1u;
-            tex_coords = vec2f((1.0 - tex_z) * 0.0625, tex_y);
+            tex_coords = vec2f(0.0625 - tex_z, tex_y);
         }
         case 1u: {
-            tex_coords = vec2f(tex_z * 0.0625, tex_y);
+            tex_coords = vec2f(tex_z, tex_y);
         }
         case 2u: {
-            mat_tex_coords.y -= 1u; // positive sides edge case
-            tex_coords = vec2f(tex_x * 0.0625, tex_y);
+            tex_coords = vec2f(tex_x, tex_y);
         }
         case 3u: {
-            tex_coords = vec2f((1.0 - tex_x) * 0.0625, tex_y);
+            tex_coords = vec2f(0.0625 - tex_x, tex_y);
         }
         case 4u: {
-            mat_tex_coords.z -= 1u;
-            tex_coords = vec2f(tex_x * 0.0625, tex_z * 0.0625);
+            tex_coords = vec2f(tex_x, tex_z);
         }
         case 5u: {
-            tex_coords = vec2f(tex_x * 0.0625, tex_z * 0.0625);
+            tex_coords = vec2f(tex_x, tex_z);
         }
         default: {}
     }
-
+    mat_tex_coords -= vec3u(u32(in.face == 0u), u32(in.face == 2u), u32(in.face == 4u));
     
-    // let face_visibility_bitmask = textureLoad(f_mat, mat_tex_coords, 0i).x;
-
-    // if (1u << in.face & face_visibility_bitmask) == 0u { discard; }
+    let face_visibility_bitmask = textureLoad(f_mat, mat_tex_coords, 0i).x;
+    if (1u << in.face & face_visibility_bitmask) == 0u { discard; }
 
     let material = textureLoad(t_mat, mat_tex_coords, 0i).x;
     if material == 0u { discard; }
     tex_coords.x += (f32(material)) * 0.0625;
 
     return textureSample(t_diffuse, s_diffuse, tex_coords);
+    // return vec4f(0.0, 0.0, 0.0, 1.0);
 }

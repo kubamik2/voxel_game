@@ -5,7 +5,7 @@ use std::{collections::HashMap, io::Write, ops::{Index, IndexMut}};
 
 use crate::{block::*, block_vertex::{BlockVertex, Face, PackedBlockVertex, VertexConstant}, camera::*};
 
-pub const RENDER_DISTANCE: usize = 64;
+pub const RENDER_DISTANCE: usize = 32;
 
 pub struct ChunkRenderer {
     pub chunks: Box<[Chunk]>,
@@ -19,7 +19,7 @@ impl ChunkRenderer {
         for x in 0..RENDER_DISTANCE as i32 {
             for y in 0..RENDER_DISTANCE as i32 {
                 let mut chunk = Chunk::randomized((x, y).into());
-
+                chunk[(0, 0, 0)].material = Material::Air;
                 let now = std::time::Instant::now();
                 for i in 0..8 {
                     chunk.load_subchunk(i, &device, &queue);
@@ -48,15 +48,16 @@ pub struct World {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub indices: u32,
+    pub gui_renderer: crate::egui_renderer::EguiRenderer,
 }
 
 impl World {
-    pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, queue: &wgpu::Queue) -> Self {
+    pub fn new(window: &winit::window::Window, device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, queue: &wgpu::Queue) -> Self {
         // camera
         let camera = Camera::default(config.width, config.height);
 
         // camera controller
-        let camera_controller = CameraController::new(50.0);
+        let camera_controller = CameraController::new(5.0);
         
         // camera uniform
         let camera_uniform = CameraUniform::new();
@@ -249,10 +250,9 @@ impl World {
         });
         let indices = indices.len() as u32;
 
-        Self { camera, camera_bind_group, camera_buffer, camera_controller, camera_uniform, rendered_chunks: ChunkRenderer::new(&device, &queue), render_pipeline, texture_atlas_bind_group, depth_texture, vertex_buffer, index_buffer, indices }
-    }
-    pub fn generate_chunks(&mut self) {
+        let gui_renderer = crate::egui_renderer::EguiRenderer::new(window, config, device);
 
+        Self { camera, camera_bind_group, camera_buffer, camera_controller, camera_uniform, rendered_chunks: ChunkRenderer::new(&device, &queue), render_pipeline, texture_atlas_bind_group, depth_texture, vertex_buffer, index_buffer, indices, gui_renderer }
     }
 
     pub fn calculate_world_mesh() -> (Vec<PackedBlockVertex>, Vec<u32>) {
@@ -310,7 +310,7 @@ impl World {
         (vertices, indices)
     }
 
-    pub fn render(&self, device: &wgpu::Device, queue: &wgpu::Queue, surface: &wgpu::Surface, window: &winit::window::Window) {
+    pub fn render(&mut self, device: &wgpu::Device, queue: &wgpu::Queue,config: &wgpu::SurfaceConfiguration, surface: &wgpu::Surface, window: &winit::window::Window, render_time: std::time::Duration, update_time: std::time::Duration) {
         let output = surface.get_current_texture().unwrap();
         let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -359,6 +359,22 @@ impl World {
                 }
             }
         }
+
+        let screen_descriptor = egui_wgpu::renderer::ScreenDescriptor {
+            size_in_pixels: [config.width, config.height],
+            pixels_per_point: window.scale_factor() as f32
+        };
+        
+        self.gui_renderer.draw(device, queue, &mut encoder, window, &view, screen_descriptor, |ctx| {
+            let gui = crate::gui::Gui {
+                position: self.camera.eye.into(),
+                direction: self.camera.direction.into(),
+                render_time,
+                update_time
+            };
+
+            gui.ui(ctx);
+        });
 
         queue.submit(std::iter::once(encoder.finish()));
         window.pre_present_notify();
@@ -553,7 +569,7 @@ impl Chunk {
                 _ => unreachable!()
             };
     
-            blocks.push(Block { material: Material::Grass });
+            blocks.push(Block { material });
         }
 
         Self { position, blocks: blocks.into_boxed_slice(), sub_chunks: [None, None, None, None, None, None, None, None] }

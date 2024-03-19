@@ -60,13 +60,13 @@ impl State {
         surface.configure(&device, &config);
 
 
-        let mut world = World::new(&device, &config, &queue);
+        let world = World::new(&window, &device, &config, &queue);
 
         Self { window, device, config, queue, size, surface, world }
     }
 
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        self.world.render(&self.device, &self.queue, &self.surface, &self.window);
+    pub fn render(&mut self, render_time: std::time::Duration, update_time: std::time::Duration) -> Result<(), wgpu::SurfaceError> {
+        self.world.render(&self.device, &self.queue, &self.config,&self.surface, &self.window, render_time, update_time);
 
         Ok(())
     }

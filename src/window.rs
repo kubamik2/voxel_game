@@ -6,6 +6,7 @@ pub fn run() {
     env_logger::init();
     let event_loop = EventLoop::new().unwrap();
     let mut window = WindowBuilder::new()
+    .with_transparent(true)
     .with_inner_size(winit::dpi::PhysicalSize::new(1000, 1000))
     .build(&event_loop).unwrap();
 
@@ -30,8 +31,7 @@ pub fn run() {
                         state.update(last_render_time.as_secs_f32());
                         let update_time = now.elapsed();
                         
-                        state.render();
-                        println!("render_time: {:?}", last_render_time);
+                        state.render(last_render_time, update_time);
                         last_render_time = now.elapsed();
                     }
                     _ => ()
