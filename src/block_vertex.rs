@@ -3,17 +3,17 @@ use wgpu::vertex_attr_array;
 
 #[derive(Debug, Clone, Copy)]
 pub struct BlockVertex {
-    pub position: Point3<u8>,
+    pub position: Point3<f32>,
     pub face: Face,
 }
 
 impl BlockVertex {
-    pub fn new(position: Point3<u8>, face: Face) -> Self {
+    pub fn new(position: Point3<f32>, face: Face) -> Self {
         Self { position, face }
     }
 
-    pub fn pack(&self) -> PackedBlockVertex {
-        PackedBlockVertex::new(self.position, self.face)
+    pub fn to_raw(&self) -> RawBlockVertex {
+        RawBlockVertex { position: self.position.into(), face: self.face as u32 }
     }
 }
 
@@ -28,25 +28,24 @@ pub enum Face {
     NegativeY,
 }
 
-
 #[repr(C)]
-#[derive(Debug, Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
-pub struct PackedBlockVertex(pub u32);
+#[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
+pub struct RawBlockVertex {
+    position: [f32; 3],
+    face: u32
+}
 
-impl PackedBlockVertex {
-    pub fn new(position: Point3<u8>, face: Face) -> Self {
-        Self(position.x as u32 | (position.y as u32) << 6 | (position.z as u32) << 12 | (face as u32) << 18)
-    }
-
-    const ATTRIBUTES: &'static [wgpu::VertexAttribute] = &vertex_attr_array![0 => Uint32];
+impl RawBlockVertex {
+    const ATTRIBUTES: &'static [wgpu::VertexAttribute] = &vertex_attr_array![0 => Float32x3, 1 => Uint32];
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<PackedBlockVertex>() as wgpu::BufferAddress,
+            array_stride: std::mem::size_of::<RawBlockVertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: Self::ATTRIBUTES,
         }
     }
 }
+
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
 pub struct VertexConstant {
@@ -54,7 +53,7 @@ pub struct VertexConstant {
 }
 
 impl VertexConstant {
-    const ATTRIBUTES: &'static [wgpu::VertexAttribute] = &vertex_attr_array![1 => Sint32x3];
+    const ATTRIBUTES: &'static [wgpu::VertexAttribute] = &vertex_attr_array![7 => Sint32x3];
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<[i32; 3]>() as wgpu::BufferAddress,

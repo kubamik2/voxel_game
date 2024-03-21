@@ -1,3 +1,5 @@
+use crate::chunk::{CHUNK_HEIGHT, CHUNK_SIZE, RENDER_DISTANCE};
+
 
 pub struct Gui {
     pub position: [f32; 3],
@@ -16,6 +18,7 @@ impl Gui {
             ui.label(format!("render_time: {:.2?}", self.render_time));
             ui.label(format!("update_time: {:.2?}", self.update_time));
             ui.label(format!("fps: {:.2}", 1.0 / self.render_time.as_secs_f32()));
+            ui.label(format!("blocks: {}", CHUNK_SIZE * CHUNK_SIZE * CHUNK_HEIGHT * RENDER_DISTANCE * RENDER_DISTANCE));
         });
     }
 }

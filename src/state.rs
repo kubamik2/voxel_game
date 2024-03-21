@@ -1,9 +1,6 @@
-use std::borrow::Borrow;
-
-use cgmath::{Point3, Rotation3};
-use winit::{raw_window_handle::HasWindowHandle, window::Window};
-use crate::{block::Material, chunk::{Chunk, World}, egui_renderer::EguiRenderer};
-use wgpu::util::DeviceExt;
+use cgmath::{Point2, Point3};
+use winit::window::Window;
+use crate::chunk::World;
 
 pub struct State {
     pub surface: wgpu::Surface,
@@ -58,7 +55,6 @@ impl State {
         };
 
         surface.configure(&device, &config);
-
 
         let world = World::new(&window, &device, &config, &queue);
 
