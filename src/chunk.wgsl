@@ -91,21 +91,25 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         fract(in.position.z) * 0.0625,
     );
 
+    var shade = vec4f(1.0, 1.0, 1.0, 1.0);
     var uv2 = vec2f();
     switch in.face {
         case 0u: {
             uv2 = uv3.zy;
         }
         case 1u: {
+            shade = vec4f(0.3, 0.3, 0.3, 1.0);
             uv2 = uv3.zy;
         }
         case 2u: {
             uv2 = uv3.xy;
         }
         case 3u: {
+            shade = vec4f(0.3, 0.3, 0.3, 1.0);
             uv2 = uv3.xy;
         }
         case 4u: {
+            shade = vec4f(1.3, 1.3, 1.3, 1.0);
             uv2 = uv3.xz;
         }
         case 5u: {
@@ -116,7 +120,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     uv2.x += f32(in.texture_index - 1u) * 0.0625;
 
-    return textureSample(t_diffuse, s_diffuse, uv2);
+    return textureSample(t_diffuse, s_diffuse, uv2) * shade;
 
 //     let v = f32(in.chunk_index) / 23.0;
 //     return vec4f(v, v, v, 1.0);

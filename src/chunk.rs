@@ -36,15 +36,14 @@ impl ChunkManager {
 
         for chunk in manager.chunks.iter_mut() {
             let now = std::time::Instant::now();
-            for i in 0..CHUNKS_PER_WORLD_CHUNK {
-                chunk.mesh_chunk(i, queue);
-            }
+            chunk.mesh_every_chunk(device, queue);
             chunk_construction_time += now.elapsed();
         }
 
         println!("chunk_construction_time: {:?}", chunk_construction_time / (RENDER_DISTANCE.pow(2) * CHUNKS_PER_WORLD_CHUNK) as u32);
         println!("world_chunk_construction_time: {:?}", chunk_construction_time / (RENDER_DISTANCE.pow(2)) as u32);
         println!("chunk_baking_time: {:?}", chunk_baking_time);
+        dbg!(manager.chunks[0].mesh.instance_buffer.size());
         manager
     }
     
@@ -370,7 +369,7 @@ impl World {
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_bind_group(0, &self.texture_atlas_bind_group, &[]);
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-            
+
 
             for chunk in self.rendered_chunks.chunks.iter() {
                 render_pass.set_vertex_buffer(1, chunk.mesh.instance_buffer.slice(..));
@@ -457,7 +456,7 @@ impl WorldChunk {
             for y in 0..CHUNK_SIZE {
                 for z in 0..CHUNK_SIZE {
                     for x in 0..CHUNK_SIZE {
-                        let val = (perlin.get([(x as i32 + position.x * CHUNK_SIZE as i32) as f64 / 64.0, (z as i32 + position.y * CHUNK_SIZE as i32) as f64 / 64.0]).clamp(0.0, WORLD_HEIGHT as f64) * 50.0) as usize + 100;
+                        let val = ((perlin.get([(x as i32 + position.x * CHUNK_SIZE as i32) as f64 / 64.0, (z as i32 + position.y * CHUNK_SIZE as i32) as f64 / 64.0]) * 50.0) as i32 + 100) as usize;
                         if y + i * CHUNK_SIZE < val {
                             blocks.push(Block { material: Material::Grass, adjacent_blocks_bitmap: AdjacentBlockBitmap(u8::MAX) });
                         } else {
@@ -478,7 +477,7 @@ impl WorldChunk {
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             mapped_at_creation: false,
-            size: 1_179_648, // TODO change
+            size: MIN_CHUNK_BUCKET_SIZE as u64 * CHUNKS_PER_WORLD_CHUNK as u64, // TODO change
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST
         });
 
@@ -532,14 +531,14 @@ impl WorldChunk {
         WorldChunkMesh {
             instance_buffer,
             indirect_buffer,
-            chunk_bucket_sizes: std::array::from_fn(|_| (CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE * 3 * 4) as u32),
+            chunk_bucket_sizes: std::array::from_fn(|_| MIN_CHUNK_BUCKET_SIZE),
             chunk_bucket_instances_count: std::array::from_fn(|_| 0),
             translation_bind_group
         }
     }
 
-    pub fn mesh_chunk(&mut self, index: usize, queue: &wgpu::Queue) {
-        let mut instances = [BlockFaceInstanceRaw(0); CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE * 3];
+    pub fn mesh_chunk(&mut self, index: usize, device: &wgpu::Device, queue: &wgpu::Queue) {
+        let mut instances = Box::new([BlockFaceInstanceRaw(0); CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE * 3]);
         let mut i = 0;
         let chunk = &self.chunks[index];
         for y in 0..CHUNK_SIZE {
@@ -560,17 +559,38 @@ impl WorldChunk {
             }
         }
         
+        
+        let new_instance_bucket_size = (i * std::mem::size_of::<BlockFaceInstanceRaw>()) as u32;
+
+        if new_instance_bucket_size > self.mesh.chunk_bucket_sizes[index] {
+            while self.mesh.chunk_bucket_sizes[index] < new_instance_bucket_size {
+                self.mesh.chunk_bucket_sizes[index] *= 2;
+            }
+            
+            let new_buffer_size = self.mesh.chunk_bucket_sizes.iter().sum::<u32>();
+
+            self.mesh.instance_buffer.destroy();
+
+            self.mesh.instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                mapped_at_creation: false,
+                size: new_buffer_size as u64,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST
+            });
+
+            self.mesh_every_chunk(device, queue);
+            return;
+        }
+
         self.mesh.chunk_bucket_instances_count[index] = i as u32;
 
         let instance_data: &[u8] = bytemuck::cast_slice(&instances[0..i]);
 
-
         let offset: u32 = (0..index).map(|f| self.mesh.chunk_bucket_sizes[f]).sum();
-        let size = self.mesh.chunk_bucket_sizes[index];
 
         queue.write_buffer(&self.mesh.instance_buffer, offset as u64, instance_data);
 
-        let base_instance = (0..index).map(|f| self.mesh.chunk_bucket_sizes[f]).sum::<u32>() / std::mem::size_of::<BlockFaceInstanceRaw>() as u32;
+        let base_instance = offset / std::mem::size_of::<BlockFaceInstanceRaw>() as u32;
         let indirect_args = wgpu::util::DrawIndirect {
             base_instance,
             base_vertex: (index * Block::FACE_VERTICES.len()) as u32,
@@ -578,11 +598,13 @@ impl WorldChunk {
             vertex_count: Block::FACE_VERTICES.len() as u32,
         };
 
-        queue.write_buffer(&self.mesh.indirect_buffer, (index * std::mem::size_of::<wgpu::util::DrawIndirect>()) as u64, indirect_args.as_bytes())
+        queue.write_buffer(&self.mesh.indirect_buffer, (index * std::mem::size_of::<wgpu::util::DrawIndirect>()) as u64, indirect_args.as_bytes());
     }
 
-    pub fn remesh_world_chunk(&mut self) {
-
+    pub fn mesh_every_chunk(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        for i in 0..CHUNKS_PER_WORLD_CHUNK {
+            self.mesh_chunk(i, device, queue);
+        }
     }
 }
 
@@ -618,19 +640,16 @@ impl Chunk {
         let mut blocks = vec![];
         let mut rng = rand::thread_rng();
 
-        for y in 0..CHUNK_SIZE {
-            for z in 0..CHUNK_SIZE {
-                for x in 0..CHUNK_SIZE {
-                    let material = match rng.gen_range(0..2) {
-                        0 => Material::Air,
-                        1 => Material::Cobblestone,
-                        _ => unreachable!()
-                    };
+        for i in 0..CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE {
+            let material = match rng.gen_range(0..2) {
+                0 => Material::Air,
+                1 => Material::Cobblestone,
+                _ => unreachable!()
+            };
 
-                    blocks.push(Block { material, adjacent_blocks_bitmap: AdjacentBlockBitmap(u8::MAX) })
-                }
-            }
+            blocks.push(Block { material, adjacent_blocks_bitmap: AdjacentBlockBitmap(u8::MAX) })
         }
+        
         let mut chunk = Chunk { blocks: blocks.into_boxed_slice() };
         chunk.bake_faces();
         chunk
