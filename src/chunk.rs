@@ -5,7 +5,10 @@ use std::ops::{Index, IndexMut};
 
 use crate::{block::*, block_vertex::{BlockVertex, Face, RawBlockVertex, VertexConstant}, camera::*};
 
-pub const RENDER_DISTANCE: usize = 32;
+pub const RENDER_DISTANCE: usize = 1;
+
+pub const CHUNK_SIZE: usize = 512;
+pub const CHUNK_HEIGHT: usize = 256;
 
 pub struct ChunkRenderer {
     pub chunks: Box<[Chunk]>,
@@ -15,22 +18,27 @@ impl ChunkRenderer {
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         let mut chunks = vec![];
         
-        let mut time = std::time::Duration::ZERO;
+        let mut chunk_loading_time = std::time::Duration::ZERO;
+        let mut chunk_creation_time = std::time::Duration::ZERO;
+
         for x in 0..RENDER_DISTANCE as i32 {
             for y in 0..RENDER_DISTANCE as i32 {
-                let mut chunk = Chunk::perlin((x, y).into());
-                chunk[(0, 0, 0)].material = Material::Air;
                 let now = std::time::Instant::now();
-                for i in 0..SUB_CHUNKS_PER_CHUNK {
-                    chunk.load_subchunk(i, &device, &queue);
-                }
-                time += now.elapsed();
+                let mut chunk = Chunk::perlin((x, y).into());
+                chunk_creation_time += now.elapsed();
+
+                chunk[(0, 0, 0)].material = Material::Cobblestone;
+
+
+                let now = std::time::Instant::now();
+                chunk.load_chunk(&device, &queue);
+                chunk_loading_time += now.elapsed();
 
                 chunks.push(chunk);
             }
         }
-        println!("subchunk_creation_time: {:?}", time / (RENDER_DISTANCE * RENDER_DISTANCE * SUB_CHUNKS_PER_CHUNK) as u32);
-        println!("world_creation_time: {:?}", time);
+        println!("chunk_loading_time: {:?}", chunk_loading_time / (RENDER_DISTANCE * RENDER_DISTANCE) as u32);
+        println!("chunk_creation_time: {:?}", chunk_creation_time / (RENDER_DISTANCE * RENDER_DISTANCE) as u32);
 
         Self { chunks: chunks.into_boxed_slice() }
     }
@@ -275,7 +283,7 @@ impl World {
             }
         }
 
-        for y in 0..SUB_CHUNK_HEIGHT {
+        for y in 0..CHUNK_HEIGHT {
             for i in 4..6 {
                 for mut vertex in Chunk::CHUNK_VERTICES[i] {
                     vertex.position.y += y as f32;
@@ -331,15 +339,12 @@ impl World {
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
             for chunk in self.rendered_chunks.chunks.iter() {
-                for (i, sub_chunk) in chunk.sub_chunks.iter().enumerate() {
-                    if let Some(sub_chunk) = sub_chunk {
-                        if sub_chunk.is_all_air { continue; }
-                        render_pass.set_vertex_buffer(1, sub_chunk.translation_buffer.slice(..));
+                if chunk.chunk_data_texture.is_some() && chunk.translation_buffer.is_some() {
+                    render_pass.set_vertex_buffer(1, chunk.translation_buffer.as_ref().unwrap().slice(..));
 
-                        render_pass.set_bind_group(2, &sub_chunk.subchunk_texture, &[]);
-                        
-                        render_pass.draw_indexed(0..self.indices, 0, 0..1);
-                    }
+                    render_pass.set_bind_group(2, chunk.chunk_data_texture.as_ref().unwrap(), &[]);
+                    
+                    render_pass.draw_indexed(0..self.indices, 0, 0..1);
                 }
             }
         }
@@ -366,15 +371,11 @@ impl World {
     }
 }
 
-pub const CHUNK_SIZE: usize = 64;
-pub const CHUNK_HEIGHT: usize = 256;
-pub const SUB_CHUNK_HEIGHT: usize = 32;
-pub const SUB_CHUNKS_PER_CHUNK: usize = CHUNK_HEIGHT / SUB_CHUNK_HEIGHT;
-
 pub struct Chunk {
     pub position: Point2<i32>,
     pub blocks: Box<[Block]>,
-    pub sub_chunks: [Option<SubChunk>; SUB_CHUNKS_PER_CHUNK]
+    pub chunk_data_texture: Option<wgpu::BindGroup>,
+    pub translation_buffer: Option<wgpu::Buffer>,
 }
 
 impl Index<(usize, usize, usize)> for Chunk {
@@ -392,39 +393,39 @@ impl IndexMut<(usize, usize, usize)> for Chunk {
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
-pub struct SubChunkData(u32);
+pub struct ChunkData(u32);
 
 impl Chunk {
     pub const CHUNK_VERTICES: [[BlockVertex; 4]; 6] = [
         [
-            BlockVertex { position: Point3::new(1.0, 0.0, CHUNK_SIZE as f32), face: Face::PositiveX },
+            BlockVertex { position: Point3::new(1.0, 0.0, (CHUNK_SIZE * RENDER_DISTANCE) as f32), face: Face::PositiveX },
             BlockVertex { position: Point3::new(1.0, 0.0, 0.0), face: Face::PositiveX },
-            BlockVertex { position: Point3::new(1.0, SUB_CHUNK_HEIGHT as f32, CHUNK_SIZE as f32), face: Face::PositiveX },
-            BlockVertex { position: Point3::new(1.0, SUB_CHUNK_HEIGHT as f32, 0.0), face: Face::PositiveX },
+            BlockVertex { position: Point3::new(1.0, CHUNK_HEIGHT as f32, (CHUNK_SIZE * RENDER_DISTANCE) as f32), face: Face::PositiveX },
+            BlockVertex { position: Point3::new(1.0, CHUNK_HEIGHT as f32, 0.0), face: Face::PositiveX },
         ],
         [
             BlockVertex { position: Point3::new(0.0, 0.0, 0.0), face: Face::NegativeX },
-            BlockVertex { position: Point3::new(0.0, 0.0, CHUNK_SIZE as f32), face: Face::NegativeX },
-            BlockVertex { position: Point3::new(0.0, SUB_CHUNK_HEIGHT as f32, 0.0), face: Face::NegativeX },
-            BlockVertex { position: Point3::new(0.0, SUB_CHUNK_HEIGHT as f32, CHUNK_SIZE as f32), face: Face::NegativeX },
+            BlockVertex { position: Point3::new(0.0, 0.0, (CHUNK_SIZE * RENDER_DISTANCE) as f32), face: Face::NegativeX },
+            BlockVertex { position: Point3::new(0.0, CHUNK_HEIGHT as f32, 0.0), face: Face::NegativeX },
+            BlockVertex { position: Point3::new(0.0, CHUNK_HEIGHT as f32, (CHUNK_SIZE * RENDER_DISTANCE) as f32), face: Face::NegativeX },
         ],
         [
             BlockVertex { position: Point3::new(0.0, 0.0, 1.0), face: Face::PositiveZ },
-            BlockVertex { position: Point3::new(CHUNK_SIZE as f32, 0.0, 1.0), face: Face::PositiveZ },
-            BlockVertex { position: Point3::new(0.0, SUB_CHUNK_HEIGHT as f32, 1.0), face: Face::PositiveZ },
-            BlockVertex { position: Point3::new(CHUNK_SIZE as f32, SUB_CHUNK_HEIGHT as f32, 1.0), face: Face::PositiveZ },
+            BlockVertex { position: Point3::new((CHUNK_SIZE * RENDER_DISTANCE) as f32, 0.0, 1.0), face: Face::PositiveZ },
+            BlockVertex { position: Point3::new(0.0, CHUNK_HEIGHT as f32, 1.0), face: Face::PositiveZ },
+            BlockVertex { position: Point3::new((CHUNK_SIZE * RENDER_DISTANCE) as f32, CHUNK_HEIGHT as f32, 1.0), face: Face::PositiveZ },
         ],
         [
-            BlockVertex { position: Point3::new(CHUNK_SIZE as f32, 0.0, 0.0), face: Face::NegativeZ },
+            BlockVertex { position: Point3::new((CHUNK_SIZE * RENDER_DISTANCE) as f32, 0.0, 0.0), face: Face::NegativeZ },
             BlockVertex { position: Point3::new(0.0, 0.0, 0.0), face: Face::NegativeZ },
-            BlockVertex { position: Point3::new(CHUNK_SIZE as f32, SUB_CHUNK_HEIGHT as f32, 0.0), face: Face::NegativeZ },
-            BlockVertex { position: Point3::new(0.0, SUB_CHUNK_HEIGHT as f32, 0.0), face: Face::NegativeZ },
+            BlockVertex { position: Point3::new((CHUNK_SIZE * RENDER_DISTANCE) as f32, CHUNK_HEIGHT as f32, 0.0), face: Face::NegativeZ },
+            BlockVertex { position: Point3::new(0.0, CHUNK_HEIGHT as f32, 0.0), face: Face::NegativeZ },
         ],
         [
             BlockVertex { position: Point3::new(0.0, 1.0, 0.0), face: Face::PositiveY },
-            BlockVertex { position: Point3::new(0.0, 1.0, CHUNK_SIZE as f32), face: Face::PositiveY },
-            BlockVertex { position: Point3::new(CHUNK_SIZE as f32, 1.0, 0.0), face: Face::PositiveY },
-            BlockVertex { position: Point3::new(CHUNK_SIZE as f32, 1.0, CHUNK_SIZE as f32), face: Face::PositiveY },
+            BlockVertex { position: Point3::new(0.0, 1.0, (CHUNK_SIZE * RENDER_DISTANCE) as f32), face: Face::PositiveY },
+            BlockVertex { position: Point3::new((CHUNK_SIZE * RENDER_DISTANCE) as f32, 1.0, 0.0), face: Face::PositiveY },
+            BlockVertex { position: Point3::new((CHUNK_SIZE * RENDER_DISTANCE) as f32, 1.0, (CHUNK_SIZE * RENDER_DISTANCE) as f32), face: Face::PositiveY },
         ],
         [
             BlockVertex { position: Point3::new(CHUNK_SIZE as f32, 0.0, 0.0), face: Face::NegativeY },
@@ -440,17 +441,14 @@ impl Chunk {
     ];
 
     #[inline]
-    pub fn load_subchunk(&mut self, index: usize, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let y_offset = index * SUB_CHUNK_HEIGHT;
-        let mut subchunk_data = [SubChunkData(0); SUB_CHUNK_HEIGHT * CHUNK_SIZE * CHUNK_SIZE];
-        let mut air_count = 0;
+    pub fn load_chunk(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        let mut chunk_data = Box::new([ChunkData(0); CHUNK_HEIGHT * CHUNK_SIZE * CHUNK_SIZE]);
 
         let mut i = 0;
-        for y in y_offset..y_offset + SUB_CHUNK_HEIGHT {
+        for y in 0..CHUNK_HEIGHT {
             for z in 0..CHUNK_SIZE {
                 for x in 0..CHUNK_SIZE {
                     let material = self[(x, y, z)].material;
-                    air_count += (material == Material::Air) as u32;
                     let face_visibility_bitmask = 
                     (self.is_face_visible(0, x, y, z) as u8) | 
                     (self.is_face_visible(1, x, y, z) as u8) << 1 | 
@@ -459,21 +457,15 @@ impl Chunk {
                     (self.is_face_visible(4, x, y, z) as u8) << 4 | 
                     (self.is_face_visible(5, x, y, z) as u8) << 5;
 
-                    subchunk_data[i] = SubChunkData(material as u32 | (face_visibility_bitmask as u32) << 8);
+                    chunk_data[i] = ChunkData(material as u32 | (face_visibility_bitmask as u32) << 8);
 
                     i += 1;
                 }
             }
         }
-        
-        // for j in block_index_start..block_index_start + SUB_CHUNK_HEIGHT * CHUNK_SIZE * CHUNK_SIZE {
-        //     material_data[i] = self.blocks[j].material as u8;
-        //     face_visibility_data[i] = self.is_face_visible(0, , y, z)
-        //     i += 1;
-        // }
 
-        let subchunk_texture = crate::texture::Texture::create_3d_material_texture(device, queue, bytemuck::cast_slice(&subchunk_data));
-        let subchunk_texture_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let chunk_data_texture = crate::texture::Texture::create_3d_material_texture(device, queue, bytemuck::cast_slice(&*chunk_data));
+        let chunk_data_texture_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("subchunk texture bind group layout"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
@@ -488,13 +480,13 @@ impl Chunk {
                 },
             ]
         });
-        let subchunk_texture = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let chunk_data_texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("3d material texture bind group"),
-            layout: &subchunk_texture_bind_group_layout,
+            layout: &chunk_data_texture_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&subchunk_texture.view)
+                    resource: wgpu::BindingResource::TextureView(&chunk_data_texture.view)
                 },
             ]
         });
@@ -502,17 +494,19 @@ impl Chunk {
         let translation_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("chunk_translation_buffer"),
             usage: wgpu::BufferUsages::VERTEX,
-            contents: bytemuck::cast_slice(&[VertexConstant { chunk_translation_offset: [self.position.x * CHUNK_SIZE as i32, y_offset as i32, self.position.y * CHUNK_SIZE as i32]}])
+            contents: bytemuck::cast_slice(&[VertexConstant { chunk_translation_offset: [self.position.x * CHUNK_SIZE as i32, 0, self.position.y * CHUNK_SIZE as i32]}])
         });
 
-        self.sub_chunks[index] = Some(SubChunk { subchunk_texture, translation_buffer, is_all_air: air_count == (CHUNK_SIZE * CHUNK_SIZE * SUB_CHUNK_HEIGHT) as u32 })
+        self.chunk_data_texture = Some(chunk_data_texture_bind_group);
+        self.translation_buffer = Some(translation_buffer);
     }
 
     pub fn new(position: Point2<i32>) -> Self {
         Self { 
             position,
             blocks: vec![Block { material: Material::Cobblestone }; CHUNK_SIZE * CHUNK_SIZE * CHUNK_HEIGHT].into_boxed_slice(),
-            sub_chunks: std::array::from_fn(|_| None)
+            chunk_data_texture: None,
+            translation_buffer: None
         }
     }
 
@@ -542,7 +536,7 @@ impl Chunk {
         }
 
 
-        Self { position, blocks: blocks.into_boxed_slice(), sub_chunks: std::array::from_fn(|_| None) }
+        Self { position, blocks: blocks.into_boxed_slice(), chunk_data_texture: None, translation_buffer: None }
     }
 
     
@@ -555,8 +549,8 @@ impl Chunk {
         for y in 0..CHUNK_HEIGHT {
             for z in 0..CHUNK_SIZE {
                 for x in 0..CHUNK_SIZE {
-                    let mut val = perlin1.get([((position.x * CHUNK_SIZE as i32) as f64 + x as f64) / (CHUNK_SIZE) as f64, ((position.y * CHUNK_SIZE as i32) as f64 + z as f64) / (CHUNK_SIZE) as f64]);
-                    val += 8.0 * (perlin2.get([((position.x * CHUNK_SIZE as i32) as f64 + x as f64) / (CHUNK_SIZE * 10) as f64, ((position.y * CHUNK_SIZE as i32) as f64 + z as f64) / (CHUNK_SIZE * 10) as f64])).max(0.0);
+                    let mut val = perlin1.get([((position.x * CHUNK_SIZE as i32) as f64 + x as f64) / (64) as f64, ((position.y * CHUNK_SIZE as i32) as f64 + z as f64) / (64) as f64]);
+                    val += 8.0 * (perlin2.get([((position.x * CHUNK_SIZE as i32) as f64 + x as f64) / (64 * 10) as f64, ((position.y * CHUNK_SIZE as i32) as f64 + z as f64) / (64 * 10) as f64])).max(0.0);
                     
                     if (val * CHUNK_HEIGHT as f64 * 0.1 + 64.0) > y as f64 {
                         blocks.push(Block { material: Material::Grass });
@@ -567,7 +561,7 @@ impl Chunk {
             }
         }
 
-        Self { position, blocks: blocks.into_boxed_slice(), sub_chunks: std::array::from_fn(|_| None) }
+        Self { position, blocks: blocks.into_boxed_slice(), chunk_data_texture: None, translation_buffer: None }
     }
 
     #[inline]
@@ -595,10 +589,4 @@ impl Chunk {
             _ => unreachable!()
         }
     }
-}
-
-pub struct SubChunk {
-    pub subchunk_texture: wgpu::BindGroup,
-    pub translation_buffer: wgpu::Buffer,
-    pub is_all_air: bool
 }

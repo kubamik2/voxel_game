@@ -107,7 +107,7 @@ impl Texture {
         let size = wgpu::Extent3d {
             width: crate::chunk::CHUNK_SIZE as u32,
             height: crate::chunk::CHUNK_SIZE as u32,
-            depth_or_array_layers: crate::chunk::SUB_CHUNK_HEIGHT as u32,
+            depth_or_array_layers: crate::chunk::CHUNK_HEIGHT as u32,
         };
 
         let texture = device.create_texture(&Self::desc_3d_material_texture());
@@ -149,7 +149,7 @@ impl Texture {
         let size = wgpu::Extent3d {
             width: crate::chunk::CHUNK_SIZE as u32,
             height: crate::chunk::CHUNK_SIZE as u32,
-            depth_or_array_layers: crate::chunk::SUB_CHUNK_HEIGHT as u32,
+            depth_or_array_layers: crate::chunk::CHUNK_HEIGHT as u32,
         };
         wgpu::TextureDescriptor {
             label: Some("3d material texture"),

@@ -44,9 +44,9 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     var mat_tex_coords = vec3u(
-        u32(in.position.x + 0.00001), // fixes visual glitches on some GPUs, maybe because of float inprecision?
-        u32(in.position.z + 0.00001),
-        u32(in.position.y + 0.00001),
+        u32(in.position.x), // fixes visual glitches on some GPUs, maybe because of float inprecision?
+        u32(in.position.z),
+        u32(in.position.y),
     );
 
     let tex_x = fract(in.position.x) * 0.0625;
@@ -83,9 +83,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let material = subchunk_data.x & 255u;
     let face_visibility_bitmask = subchunk_data.x >> 8u;
 
-    if material == 0u || (1u << in.face & face_visibility_bitmask) == 0u { discard; }
+    // if material == 0u || (1u << in.face & face_visibility_bitmask) == 0u { discard; }
+    if material == 0u { discard; }
+    //if (1u << in.face & face_visibility_bitmask) == 0u { return vec4f(0.0, 0.0, 0.0, 1.0); }
 
     tex_coords.x += (f32(material)) * 0.0625;
-
-    return textureSample(t_diffuse, s_diffuse, tex_coords);
+    return vec4f(tex_coords.x * 16.0, tex_coords.y * 16.0, 0.0, 1.0);
+    //return textureSample(t_diffuse, s_diffuse, tex_coords);
 }

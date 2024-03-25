@@ -17,7 +17,7 @@ impl State {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
+            backends: wgpu::Backends::VULKAN,
             ..Default::default()
         });
 
@@ -37,7 +37,7 @@ impl State {
 
         let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
             label: None,
-            features: wgpu::Features::default() | wgpu::Features::POLYGON_MODE_LINE | wgpu::Features::MULTI_DRAW_INDIRECT,
+            features: wgpu::Features::default(),
             limits
         }, None).await.unwrap();
 
