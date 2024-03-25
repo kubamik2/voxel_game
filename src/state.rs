@@ -31,13 +31,13 @@ impl State {
         }).await.unwrap();
 
         let limits = wgpu::Limits {
-            max_buffer_size: 1024 * 1024 * 1024,
+            max_buffer_size: u32::MAX as u64,
             ..Default::default()
         };
 
         let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
             label: None,
-            features: wgpu::Features::default(),
+            features: wgpu::Features::default() | wgpu::Features::MULTI_DRAW_INDIRECT | wgpu::Features::INDIRECT_FIRST_INSTANCE,
             limits
         }, None).await.unwrap();
 
@@ -49,7 +49,7 @@ impl State {
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::Fifo,
+            present_mode: wgpu::PresentMode::Immediate,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![]
         };

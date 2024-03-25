@@ -103,63 +103,63 @@ impl Texture {
         Self { texture, view, sampler }
     }
 
-    pub fn create_3d_material_texture(device: &wgpu::Device, queue: &wgpu::Queue, data: &[u8]) -> Self {
-        let size = wgpu::Extent3d {
-            width: crate::chunk::CHUNK_SIZE as u32,
-            height: crate::chunk::CHUNK_SIZE as u32,
-            depth_or_array_layers: crate::chunk::CHUNK_HEIGHT as u32,
-        };
+    // pub fn create_3d_material_texture(device: &wgpu::Device, queue: &wgpu::Queue, data: &[u8]) -> Self {
+    //     let size = wgpu::Extent3d {
+    //         width: crate::chunk::CHUNK_SIZE as u32,
+    //         height: crate::chunk::CHUNK_SIZE as u32,
+    //         depth_or_array_layers: crate::chunk::CHUNK_SIZE as u32,
+    //     };
 
-        let texture = device.create_texture(&Self::desc_3d_material_texture());
+    //     let texture = device.create_texture(&Self::desc_3d_material_texture());
 
-        queue.write_texture(
-            wgpu::ImageCopyTexture {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All
-            },
-            &data,
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * crate::chunk::CHUNK_SIZE as u32),
-                rows_per_image: Some(crate::chunk::CHUNK_SIZE as u32),
-            },
-            size
-        );
+    //     queue.write_texture(
+    //         wgpu::ImageCopyTexture {
+    //             texture: &texture,
+    //             mip_level: 0,
+    //             origin: wgpu::Origin3d::ZERO,
+    //             aspect: wgpu::TextureAspect::All
+    //         },
+    //         &data,
+    //         wgpu::ImageDataLayout {
+    //             offset: 0,
+    //             bytes_per_row: Some(4 * crate::chunk::CHUNK_SIZE as u32),
+    //             rows_per_image: Some(crate::chunk::CHUNK_SIZE as u32),
+    //         },
+    //         size
+    //     );
 
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("3d material texture"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            lod_min_clamp: 0.0,
-            lod_max_clamp: 100.0,
-            ..Default::default()
-        });
+    //     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+    //     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+    //         label: Some("3d material texture"),
+    //         address_mode_u: wgpu::AddressMode::ClampToEdge,
+    //         address_mode_v: wgpu::AddressMode::ClampToEdge,
+    //         address_mode_w: wgpu::AddressMode::ClampToEdge,
+    //         mag_filter: wgpu::FilterMode::Nearest,
+    //         min_filter: wgpu::FilterMode::Nearest,
+    //         mipmap_filter: wgpu::FilterMode::Nearest,
+    //         lod_min_clamp: 0.0,
+    //         lod_max_clamp: 100.0,
+    //         ..Default::default()
+    //     });
 
-        Self { texture, view, sampler }
-    }
+    //     Self { texture, view, sampler }
+    // }
 
-    pub fn desc_3d_material_texture() -> wgpu::TextureDescriptor<'static> {
-        let size = wgpu::Extent3d {
-            width: crate::chunk::CHUNK_SIZE as u32,
-            height: crate::chunk::CHUNK_SIZE as u32,
-            depth_or_array_layers: crate::chunk::CHUNK_HEIGHT as u32,
-        };
-        wgpu::TextureDescriptor {
-            label: Some("3d material texture"),
-            size,
-            usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
-            mip_level_count: 1,
-            dimension: wgpu::TextureDimension::D3,
-            format: wgpu::TextureFormat::R32Uint,
-            sample_count: 1,
-            view_formats: &[]
-        }
-    }
+    // pub fn desc_3d_material_texture() -> wgpu::TextureDescriptor<'static> {
+    //     let size = wgpu::Extent3d {
+    //         width: crate::chunk::CHUNK_SIZE as u32,
+    //         height: crate::chunk::CHUNK_SIZE as u32,
+    //         depth_or_array_layers: crate::chunk::CHUNK_SIZE as u32,
+    //     };
+    //     wgpu::TextureDescriptor {
+    //         label: Some("3d material texture"),
+    //         size,
+    //         usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
+    //         mip_level_count: 1,
+    //         dimension: wgpu::TextureDimension::D3,
+    //         format: wgpu::TextureFormat::R32Uint,
+    //         sample_count: 1,
+    //         view_formats: &[]
+    //     }
+    // }
 }

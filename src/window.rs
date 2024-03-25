@@ -8,6 +8,7 @@ pub fn run() {
     let mut window = WindowBuilder::new()
     .with_transparent(true)
     .with_inner_size(winit::dpi::PhysicalSize::new(1000, 1000))
+    // .with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)))
     .build(&event_loop).unwrap();
 
     window.set_cursor_grab(winit::window::CursorGrabMode::Confined);

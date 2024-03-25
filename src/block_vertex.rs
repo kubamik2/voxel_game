@@ -3,17 +3,24 @@ use wgpu::vertex_attr_array;
 
 #[derive(Debug, Clone, Copy)]
 pub struct BlockVertex {
-    pub position: Point3<f32>,
-    pub face: Face,
+    pub position: Point3<u8>, // u1
+    pub chunk_index: u8,
 }
 
 impl BlockVertex {
-    pub fn new(position: Point3<f32>, face: Face) -> Self {
-        Self { position, face }
+    pub fn new(position: Point3<u8>, face: Face, texture_index: u16) -> Self {
+        Self { position, chunk_index: 0 }
     }
 
     pub fn to_raw(&self) -> RawBlockVertex {
-        RawBlockVertex { position: self.position.into(), face: self.face as u32 }
+        let mut packed_data = 0;
+
+        packed_data = self.position.x as u32;
+        packed_data |= (self.position.y as u32) << 1;
+        packed_data |= (self.position.z as u32) << 2;
+        packed_data |= (self.chunk_index as u32) << 3;
+
+        RawBlockVertex(packed_data)
     }
 }
 
@@ -30,13 +37,10 @@ pub enum Face {
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
-pub struct RawBlockVertex {
-    position: [f32; 3],
-    face: u32
-}
+pub struct RawBlockVertex(pub u32);
 
 impl RawBlockVertex {
-    const ATTRIBUTES: &'static [wgpu::VertexAttribute] = &vertex_attr_array![0 => Float32x3, 1 => Uint32];
+    const ATTRIBUTES: &'static [wgpu::VertexAttribute] = &vertex_attr_array![0 => Uint32];
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<RawBlockVertex>() as wgpu::BufferAddress,
@@ -48,17 +52,6 @@ impl RawBlockVertex {
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
-pub struct VertexConstant {
-    pub chunk_translation_offset: [i32; 3],
-}
-
-impl VertexConstant {
-    const ATTRIBUTES: &'static [wgpu::VertexAttribute] = &vertex_attr_array![7 => Sint32x3];
-    pub fn desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<[i32; 3]>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Instance,
-            attributes: Self::ATTRIBUTES
-        }
-    }
+pub struct ChunkTranslation {
+    pub chunk_translation_offset: [f32; 2],
 }

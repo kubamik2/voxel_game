@@ -7,6 +7,7 @@ mod gui;
 mod chunk;
 mod block;
 mod block_vertex;
+mod instance;
 
 fn main() {
     window::run()
