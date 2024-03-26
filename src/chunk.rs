@@ -5,7 +5,7 @@ use std::ops::{Index, IndexMut};
 
 use crate::{block::*, block_vertex::{BlockVertex, ChunkTranslation, Face, RawBlockVertex}, camera::*, instance::{BlockFaceInstance, BlockFaceInstanceRaw}};
 
-pub const RENDER_DISTANCE: usize = 1;
+pub const RENDER_DISTANCE: usize = 8;
 
 pub const CHUNK_SIZE: usize = 16;
 pub const WORLD_HEIGHT: usize = 384;
@@ -23,7 +23,7 @@ impl ChunkManager {
         let mut chunk_construction_time = std::time::Duration::ZERO;
         for z in 0..RENDER_DISTANCE {
             for x in 0..RENDER_DISTANCE {
-                let chunk = WorldChunk::randomized([x as i32, z as i32].into(), device);
+                let chunk = WorldChunk::perlin([x as i32, z as i32].into(), device);
                 
                 chunks.push(chunk);
             }
@@ -408,6 +408,7 @@ impl WorldChunk {
         use noise::NoiseFn;
         let perlin = noise::Perlin::new(626645783);
         let perlin2 = noise::Perlin::new(37671345);
+        let perlin3 = noise::Perlin::new(368651);
 
         let mut chunks = vec![];
         for i in 0..CHUNKS_PER_WORLD_CHUNK {
@@ -416,11 +417,12 @@ impl WorldChunk {
                 for z in 0..CHUNK_SIZE {
                     for x in 0..CHUNK_SIZE {
                         let val = ((perlin.get([(x as i32 + position.x * CHUNK_SIZE as i32) as f64 / 64.0, (z as i32 + position.y * CHUNK_SIZE as i32) as f64 / 64.0]) * 10.0) as i32) as usize;
-                        let val2 = ((perlin2.get([(x as i32 + position.x * CHUNK_SIZE as i32) as f64 / 256.0, (z as i32 + position.y * CHUNK_SIZE as i32) as f64 / 256.0]) * 75.0) as i32) as usize;
-                        
-                        if y + i * CHUNK_SIZE < val + val2 + 100 {
+                        let val2 = (((perlin2.get([(x as i32 + position.x * CHUNK_SIZE as i32) as f64 / 256.0, (z as i32 + position.y * CHUNK_SIZE as i32) as f64 / 256.0]) - 0.3).max(0.0) * 75.0) as i32) as usize;
+                        let val3 = (((perlin3.get([(x as i32 + position.x * CHUNK_SIZE as i32) as f64 / 96.0, (z as i32 + position.y * CHUNK_SIZE as i32) as f64 / 96.0]) - 0.3) * 5.0) as i32) as usize;
+                        let val4 = (((perlin3.get([(x as i32 + position.x * CHUNK_SIZE as i32) as f64 / 384.0, (z as i32 + position.y * CHUNK_SIZE as i32) as f64 / 384.0]) - 0.5).max(0.0) * 120.0) as i32) as usize;
+                        if y + i * CHUNK_SIZE < val + val2 + val3 + val4 + 100 {
                             blocks.push(Block { material: Material::Dirt, adjacent_blocks_bitmap: AdjacentBlockBitmap(u8::MAX) });
-                        } else if y + i * CHUNK_SIZE == val + val2 + 100 {
+                        } else if y + i * CHUNK_SIZE == val + val2 + val3 + val4 + 100 {
                             blocks.push(Block { material: Material::Grass, adjacent_blocks_bitmap: AdjacentBlockBitmap(u8::MAX) });
                         } else {
                             blocks.push(Block { material: Material::Air, adjacent_blocks_bitmap: AdjacentBlockBitmap(u8::MIN) });
@@ -571,295 +573,269 @@ impl WorldChunk {
         let mut i = 0;
         let chunk = &self.chunks[index];
 
-        // pos x
+        // x
         for x in 0..CHUNK_SIZE { 
-            let mut visited = VisitedFacesBitmap::new();
+            let mut visited_pos = VisitedFacesBitmap::new();
+            let mut visited_neg = VisitedFacesBitmap::new();
             for z in 0..CHUNK_SIZE {
                 for y in 0..CHUNK_SIZE {
                     let block = &chunk[(x, y, z)];
 
-                    if block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(0) || visited.get((y,z)) { continue; }
+                    if !(block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(0) || visited_pos.get((y,z))) {
+                        let mut tile_y = 1;
+                        let mut tile_z = 1;
 
-                    let mut tile_y = 1;
-                    let mut tile_z = 1;
-
-                    for t_y in y + 1..CHUNK_SIZE {
-                        let next_block = &chunk[(x, t_y, z)];
-                        if block.material != next_block.material || visited.get((t_y,z)) || !next_block.adjacent_blocks_bitmap.face_visible(0) {
-                            break;
+                        for t_y in y + 1..CHUNK_SIZE {
+                            let next_block = &chunk[(x, t_y, z)];
+                            if block.material != next_block.material || visited_pos.get((t_y,z)) || !next_block.adjacent_blocks_bitmap.face_visible(0) {
+                                break;
+                            }
+                            tile_y += 1;
                         }
-                        tile_y += 1;
-                    }
 
-                    'tz_loop: for t_z in z + 1..CHUNK_SIZE {
-                        for t_y in y..y + tile_y {
-                            let next_block = &chunk[(x, t_y, t_z)];
-                            if block.material != next_block.material || visited.get((t_y,t_z)) || !next_block.adjacent_blocks_bitmap.face_visible(0) {
-                                break 'tz_loop;
+                        'tz_loop: for t_z in z + 1..CHUNK_SIZE {
+                            for t_y in y..y + tile_y {
+                                let next_block = &chunk[(x, t_y, t_z)];
+                                if block.material != next_block.material || visited_pos.get((t_y,t_z)) || !next_block.adjacent_blocks_bitmap.face_visible(0) {
+                                    break 'tz_loop;
+                                }
+                            }
+                            tile_z += 1;
+                        }
+
+                        for t_z in z..z + tile_z {
+                            for t_y in y..y + tile_y {
+                                visited_pos.set((t_y,t_z), true);
                             }
                         }
-                        tile_z += 1;
+
+                        instances[i] = BlockFaceInstance { 
+                            position: Point3::new(x as u8, y as u8, z as u8),
+                            face: unsafe { std::mem::transmute::<u32, Face>(0 as u32) },
+                            texture_index: block.material.texture_index()[0],
+                            greedy_tiling: Point2::new(tile_z as u8 - 1, tile_y as u8 - 1)
+                        }.to_raw();
+
+                        i += 1;
                     }
 
-                    for t_z in z..z + tile_z {
-                        for t_y in y..y + tile_y {
-                            visited.set((t_y,t_z), true);
+                    if !(block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(1) || visited_neg.get((y,z))) {
+                        let mut tile_y = 1;
+                        let mut tile_z = 1;
+
+                        for t_y in y + 1..CHUNK_SIZE {
+                            let next_block = &chunk[(x, t_y, z)];
+                            if block.material != next_block.material || visited_neg.get((t_y,z)) || !next_block.adjacent_blocks_bitmap.face_visible(1) {
+                                break;
+                            }
+                            tile_y += 1;
                         }
+
+                        'tz_loop: for t_z in z + 1..CHUNK_SIZE {
+                            for t_y in y..y + tile_y {
+                                let next_block = &chunk[(x, t_y, t_z)];
+                                if block.material != next_block.material || visited_neg.get((t_y,t_z)) || !next_block.adjacent_blocks_bitmap.face_visible(1) {
+                                    break 'tz_loop;
+                                }
+                            }
+                            tile_z += 1;
+                        }
+
+                        for t_z in z..z + tile_z {
+                            for t_y in y..y + tile_y {
+                                visited_neg.set((t_y,t_z), true);
+                            }
+                        }
+
+                        instances[i] = BlockFaceInstance { 
+                            position: Point3::new(x as u8, y as u8, z as u8),
+                            face: unsafe { std::mem::transmute::<u32, Face>(1 as u32) },
+                            texture_index: block.material.texture_index()[1],
+                            greedy_tiling: Point2::new(tile_z as u8 - 1, tile_y as u8 - 1)
+                        }.to_raw();
+
+                        i += 1;
                     }
-
-                    instances[i] = BlockFaceInstance { 
-                        position: Point3::new(x as u8, y as u8, z as u8),
-                        face: unsafe { std::mem::transmute::<u32, Face>(0 as u32) },
-                        texture_index: block.material.texture_index()[0],
-                        greedy_tiling: Point2::new(tile_z as u8 - 1, tile_y as u8 - 1)
-                    }.to_raw();
-
-                    i += 1;
                 }
             }
         }
 
-        // neg x
-        for x in 0..CHUNK_SIZE { 
-            let mut visited = VisitedFacesBitmap::new();
-            for z in 0..CHUNK_SIZE {
-                for y in 0..CHUNK_SIZE {
-                    let mut tile_y = 1;
-                    let mut tile_z = 1;
-
-                    let block = &chunk[(x, y, z)];
-
-                    if block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(1) || visited.get((y, z)) { continue; }
-
-                    for t_y in y + 1..CHUNK_SIZE {
-                        let next_block = &chunk[(x, t_y, z)];
-                        if block.material != next_block.material || visited.get((t_y, z)) || !next_block.adjacent_blocks_bitmap.face_visible(1) {
-                            break;
-                        }
-                        tile_y += 1;
-                    }
-
-                    'tz_loop: for t_z in z + 1..CHUNK_SIZE {
-                        for t_y in y..y + tile_y {
-                            let next_block = &chunk[(x, t_y, t_z)];
-                            if block.material != next_block.material ||  visited.get((t_y, t_z)) || !next_block.adjacent_blocks_bitmap.face_visible(1) {
-                                break 'tz_loop;
-                            }
-                        }
-                        tile_z += 1;
-                    }
-
-                    for t_z in z..z + tile_z {
-                        for t_y in y..y + tile_y {
-                            visited.set((t_y, t_z), true);
-                        }
-                    }
-
-                    instances[i] = BlockFaceInstance { 
-                        position: Point3::new(x as u8, y as u8, z as u8),
-                        face: unsafe { std::mem::transmute::<u32, Face>(1 as u32) },
-                        texture_index: block.material.texture_index()[1],
-                        greedy_tiling: Point2::new(tile_z as u8 - 1, tile_y as u8 - 1)
-                    }.to_raw();
-
-                    i += 1;
-                }
-            }
-        }
-
-        // pos z
+        // z
         for z in 0..CHUNK_SIZE { 
-            let mut visited = VisitedFacesBitmap::new();
+            let mut visited_pos = VisitedFacesBitmap::new();
+            let mut visited_neg = VisitedFacesBitmap::new();
             for x in 0..CHUNK_SIZE {
                 for y in 0..CHUNK_SIZE {
-                    let mut tile_y = 1;
-                    let mut tile_x = 1;
-
                     let block = &chunk[(x, y, z)];
 
-                    if block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(2) || visited.get((y, x)) { continue; }
+                    if !(block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(2) || visited_pos.get((y, x))) {
+                        let mut tile_y = 1;
+                        let mut tile_x = 1;
 
-                    for t_y in y + 1..CHUNK_SIZE {
-                        let next_block = &chunk[(x, t_y, z)];
-                        if block.material != next_block.material || visited.get((t_y, x)) || !next_block.adjacent_blocks_bitmap.face_visible(2) {
-                            break;
+                        for t_y in y + 1..CHUNK_SIZE {
+                            let next_block = &chunk[(x, t_y, z)];
+                            if block.material != next_block.material || visited_pos.get((t_y, x)) || !next_block.adjacent_blocks_bitmap.face_visible(2) {
+                                break;
+                            }
+                            tile_y += 1;
                         }
-                        tile_y += 1;
-                    }
 
-                    'tx_loop: for t_x in x + 1..CHUNK_SIZE {
-                        for t_y in y..y + tile_y {
-                            let next_block = &chunk[(t_x, t_y, z)];
-                            if block.material != next_block.material ||  visited.get((t_y, t_x)) || !next_block.adjacent_blocks_bitmap.face_visible(2) {
-                                break 'tx_loop;
+                        'tx_loop: for t_x in x + 1..CHUNK_SIZE {
+                            for t_y in y..y + tile_y {
+                                let next_block = &chunk[(t_x, t_y, z)];
+                                if block.material != next_block.material ||  visited_pos.get((t_y, t_x)) || !next_block.adjacent_blocks_bitmap.face_visible(2) {
+                                    break 'tx_loop;
+                                }
+                            }
+                            tile_x += 1;
+                        }
+
+                        for t_x in x..x + tile_x {
+                            for t_y in y..y + tile_y {
+                                visited_pos.set((t_y, t_x), true);
                             }
                         }
-                        tile_x += 1;
+
+                        instances[i] = BlockFaceInstance { 
+                            position: Point3::new(x as u8, y as u8, z as u8),
+                            face: unsafe { std::mem::transmute::<u32, Face>(2 as u32) },
+                            texture_index: block.material.texture_index()[2],
+                            greedy_tiling: Point2::new(tile_x as u8 - 1, tile_y as u8 - 1)
+                        }.to_raw();
+
+                        i += 1;
                     }
 
-                    for t_x in x..x + tile_x {
-                        for t_y in y..y + tile_y {
-                            visited.set((t_y, t_x), true);
+                    if !(block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(3) || visited_neg.get((y, x))) {
+                        let mut tile_y = 1;
+                        let mut tile_x = 1;
+
+                        for t_y in y + 1..CHUNK_SIZE {
+                            let next_block = &chunk[(x, t_y, z)];
+                            if block.material != next_block.material || visited_neg.get((t_y, x)) || !next_block.adjacent_blocks_bitmap.face_visible(3) {
+                                break;
+                            }
+                            tile_y += 1;
                         }
+
+                        'tx_loop: for t_x in x + 1..CHUNK_SIZE {
+                            for t_y in y..y + tile_y {
+                                let next_block = &chunk[(t_x, t_y, z)];
+                                if block.material != next_block.material ||  visited_neg.get((t_y, t_x)) || !next_block.adjacent_blocks_bitmap.face_visible(3) {
+                                    break 'tx_loop;
+                                }
+                            }
+                            tile_x += 1;
+                        }
+
+                        for t_x in x..x + tile_x {
+                            for t_y in y..y + tile_y {
+                                visited_neg.set((t_y, t_x), true);
+                            }
+                        }
+
+                        instances[i] = BlockFaceInstance { 
+                            position: Point3::new(x as u8, y as u8, z as u8),
+                            face: unsafe { std::mem::transmute::<u32, Face>(3 as u32) },
+                            texture_index: block.material.texture_index()[3],
+                            greedy_tiling: Point2::new(tile_x as u8 - 1, tile_y as u8 - 1)
+                        }.to_raw();
+
+                        i += 1;
                     }
-
-                    instances[i] = BlockFaceInstance { 
-                        position: Point3::new(x as u8, y as u8, z as u8),
-                        face: unsafe { std::mem::transmute::<u32, Face>(2 as u32) },
-                        texture_index: block.material.texture_index()[2],
-                        greedy_tiling: Point2::new(tile_x as u8 - 1, tile_y as u8 - 1)
-                    }.to_raw();
-
-                    i += 1;
+                    
                 }
             }
         }
 
-        // neg z
-        for z in 0..CHUNK_SIZE { 
-            let mut visited = VisitedFacesBitmap::new();
-            for x in 0..CHUNK_SIZE {
-                for y in 0..CHUNK_SIZE {
-                    let mut tile_y = 1;
-                    let mut tile_x = 1;
-
-                    let block = &chunk[(x, y, z)];
-
-                    if block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(3) || visited.get((y, x)) { continue; }
-
-                    for t_y in y + 1..CHUNK_SIZE {
-                        let next_block = &chunk[(x, t_y, z)];
-                        if block.material != next_block.material || visited.get((t_y, x)) || !next_block.adjacent_blocks_bitmap.face_visible(3) {
-                            break;
-                        }
-                        tile_y += 1;
-                    }
-
-                    'tx_loop: for t_x in x + 1..CHUNK_SIZE {
-                        for t_y in y..y + tile_y {
-                            let next_block = &chunk[(t_x, t_y, z)];
-                            if block.material != next_block.material ||  visited.get((t_y, t_x)) || !next_block.adjacent_blocks_bitmap.face_visible(3) {
-                                break 'tx_loop;
-                            }
-                        }
-                        tile_x += 1;
-                    }
-
-                    for t_x in x..x + tile_x {
-                        for t_y in y..y + tile_y {
-                            visited.set((t_y, t_x), true);
-                        }
-                    }
-
-                    instances[i] = BlockFaceInstance { 
-                        position: Point3::new(x as u8, y as u8, z as u8),
-                        face: unsafe { std::mem::transmute::<u32, Face>(3 as u32) },
-                        texture_index: block.material.texture_index()[3],
-                        greedy_tiling: Point2::new(tile_x as u8 - 1, tile_y as u8 - 1)
-                    }.to_raw();
-
-                    i += 1;
-                }
-            }
-        }
-
-        // pos y
+        // y
         for y in 0..CHUNK_SIZE { 
-            let mut visited = VisitedFacesBitmap::new();
+            let mut visited_pos = VisitedFacesBitmap::new();
+            let mut visited_neg = VisitedFacesBitmap::new();
             for z in 0..CHUNK_SIZE {
                 for x in 0..CHUNK_SIZE {
-                    let mut tile_x = 1;
-                    let mut tile_z = 1;
+                    
 
                     let block = &chunk[(x, y, z)];
 
-                    if block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(4) || visited.get((x, z)) { continue; }
+                    if !(block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(4) || visited_pos.get((x, z))) {
+                        let mut tile_x = 1;
+                        let mut tile_z = 1;
 
-                    for t_x in x + 1..CHUNK_SIZE {
-                        let next_block = &chunk[(t_x, y, z)];
-                        if block.material != next_block.material || visited.get((t_x, z)) || !next_block.adjacent_blocks_bitmap.face_visible(4) {
-                            break;
+                        for t_x in x + 1..CHUNK_SIZE {
+                            let next_block = &chunk[(t_x, y, z)];
+                            if block.material != next_block.material || visited_pos.get((t_x, z)) || !next_block.adjacent_blocks_bitmap.face_visible(4) {
+                                break;
+                            }
+                            tile_x += 1;
                         }
-                        tile_x += 1;
-                    }
 
-                    'tz_loop: for t_z in z + 1..CHUNK_SIZE {
-                        for t_x in x..x + tile_x {
-                            let next_block = &chunk[(t_x, y, t_z)];
-                            if block.material != next_block.material ||  visited.get((t_x, t_z)) || !next_block.adjacent_blocks_bitmap.face_visible(4) {
-                                break 'tz_loop;
+                        'tz_loop: for t_z in z + 1..CHUNK_SIZE {
+                            for t_x in x..x + tile_x {
+                                let next_block = &chunk[(t_x, y, t_z)];
+                                if block.material != next_block.material ||  visited_pos.get((t_x, t_z)) || !next_block.adjacent_blocks_bitmap.face_visible(4) {
+                                    break 'tz_loop;
+                                }
+                            }
+                            tile_z += 1;
+                        }
+
+                        for t_z in z..z + tile_z {
+                            for t_x in x..x + tile_x {
+                                visited_pos.set((t_x, t_z), true);
                             }
                         }
-                        tile_z += 1;
+
+                        instances[i] = BlockFaceInstance { 
+                            position: Point3::new(x as u8, y as u8, z as u8),
+                            face: unsafe { std::mem::transmute::<u32, Face>(4 as u32) },
+                            texture_index: block.material.texture_index()[4],
+                            greedy_tiling: Point2::new(tile_z as u8 - 1, tile_x as u8 - 1)
+                        }.to_raw();
+
+                        i += 1;
                     }
 
-                    for t_z in z..z + tile_z {
-                        for t_x in x..x + tile_x {
-                            visited.set((t_x, t_z), true);
+                    if !(block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(5) || visited_neg.get((x, z))) {
+                        let mut tile_x = 1;
+                        let mut tile_z = 1;
+
+                        for t_x in x + 1..CHUNK_SIZE {
+                            let next_block = &chunk[(t_x, y, z)];
+                            if block.material != next_block.material || visited_neg.get((t_x, z)) || !next_block.adjacent_blocks_bitmap.face_visible(5) {
+                                break;
+                            }
+                            tile_x += 1;
                         }
+
+                        'tz_loop: for t_z in z + 1..CHUNK_SIZE {
+                            for t_x in x..x + tile_x {
+                                let next_block = &chunk[(t_x, y, t_z)];
+                                if block.material != next_block.material ||  visited_neg.get((t_x, t_z)) || !next_block.adjacent_blocks_bitmap.face_visible(5) {
+                                    break 'tz_loop;
+                                }
+                            }
+                            tile_z += 1;
+                        }
+
+                        for t_z in z..z + tile_z {
+                            for t_x in x..x + tile_x {
+                                visited_neg.set((t_x, t_z), true);
+                            }
+                        }
+
+                        instances[i] = BlockFaceInstance { 
+                            position: Point3::new(x as u8, y as u8, z as u8),
+                            face: unsafe { std::mem::transmute::<u32, Face>(5 as u32) },
+                            texture_index: block.material.texture_index()[5],
+                            greedy_tiling: Point2::new(tile_z as u8 - 1, tile_x as u8 - 1)
+                        }.to_raw();
+
+                        i += 1;
                     }
-
-                    instances[i] = BlockFaceInstance { 
-                        position: Point3::new(x as u8, y as u8, z as u8),
-                        face: unsafe { std::mem::transmute::<u32, Face>(4 as u32) },
-                        texture_index: block.material.texture_index()[4],
-                        greedy_tiling: Point2::new(tile_z as u8 - 1, tile_x as u8 - 1)
-                    }.to_raw();
-
-                    i += 1;
                 }
             }
         }
-
-        // neg y
-        for y in 0..CHUNK_SIZE { 
-            let mut visited = VisitedFacesBitmap::new();
-            for z in 0..CHUNK_SIZE {
-                for x in 0..CHUNK_SIZE {
-                    let mut tile_x = 1;
-                    let mut tile_z = 1;
-
-                    let block = &chunk[(x, y, z)];
-
-                    if block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(5) || visited.get((x, z)) { continue; }
-
-                    for t_x in x + 1..CHUNK_SIZE {
-                        let next_block = &chunk[(t_x, y, z)];
-                        if block.material != next_block.material || visited.get((t_x, z)) || !next_block.adjacent_blocks_bitmap.face_visible(5) {
-                            break;
-                        }
-                        tile_x += 1;
-                    }
-
-                    'tz_loop: for t_z in z + 1..CHUNK_SIZE {
-                        for t_x in x..x + tile_x {
-                            let next_block = &chunk[(t_x, y, t_z)];
-                            if block.material != next_block.material ||  visited.get((t_x, t_z)) || !next_block.adjacent_blocks_bitmap.face_visible(5) {
-                                break 'tz_loop;
-                            }
-                        }
-                        tile_z += 1;
-                    }
-
-                    for t_z in z..z + tile_z {
-                        for t_x in x..x + tile_x {
-                            visited.set((t_x, t_z), true);
-                        }
-                    }
-
-                    instances[i] = BlockFaceInstance { 
-                        position: Point3::new(x as u8, y as u8, z as u8),
-                        face: unsafe { std::mem::transmute::<u32, Face>(5 as u32) },
-                        texture_index: block.material.texture_index()[5],
-                        greedy_tiling: Point2::new(tile_z as u8 - 1, tile_x as u8 - 1)
-                    }.to_raw();
-
-                    i += 1;
-                }
-            }
-        }
-        
-        
         
         let new_instance_bucket_size = (i * std::mem::size_of::<BlockFaceInstanceRaw>()) as u32;
 
