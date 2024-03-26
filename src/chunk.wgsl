@@ -78,8 +78,8 @@ fn vs_main(in: VertexInput, @builtin(vertex_index) vertex_index: u32) -> VertexO
             position = position.yxz;
             position.z = (position.z ^ 1u) & 1u;
 
-            position.x *= (greedy_x + 1u);
-            position.z *= (greedy_y + 1u);
+            position.x *= (greedy_y + 1u);
+            position.z *= (greedy_x + 1u);
         }
         default: {}
     }
@@ -104,24 +104,20 @@ fn vs_main(in: VertexInput, @builtin(vertex_index) vertex_index: u32) -> VertexO
         }
         case 1u: {
             uv = vec2f(0.0625, 0.0625);
-            // position_f32.z += f32(greedy_x);
         }
         case 2u: {
             uv = vec2f(0.0, 0.0);
-            // position_f32.y += f32(greedy_y);
         }
         case 3u: {
             uv = vec2f(0.0625, 0.0);
-            // position_f32.z += f32(greedy_x);
-            // position_f32.y += f32(greedy_y);
         }
         default: {} 
     }
 
     let texture_index = (in.packed_instance_data >> 15u) & 255u;
 
-    uv.x += f32((texture_index) % 16u) * 0.0625;
-    uv.y += f32((texture_index - 1u) / 16u) * 0.0625;
+    let uv_texture_offset = vec2f(f32(texture_index % 16u) * 0.0625, f32(texture_index / 16u) * 0.0625);
+    uv += uv_texture_offset;
 
     // view projection
     out.clip_position = camera.view_projection * vec4f(position_f32, 1.0);
@@ -129,7 +125,7 @@ fn vs_main(in: VertexInput, @builtin(vertex_index) vertex_index: u32) -> VertexO
     out.face = face;
     out.uv = uv;
     out.greedy_tiling = vec2f(f32(greedy_x + 1u), f32(greedy_y + 1u));
-    out.base_uv_coords = vec2f(f32((texture_index) % 16u) * 0.0625, f32((texture_index - 1u) / 16u) * 0.0625);
+    out.base_uv_coords = uv_texture_offset;
     return out;
 }
 

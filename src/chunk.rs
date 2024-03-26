@@ -5,9 +5,7 @@ use std::ops::{Index, IndexMut};
 
 use crate::{block::*, block_vertex::{BlockVertex, ChunkTranslation, Face, RawBlockVertex}, camera::*, instance::{BlockFaceInstance, BlockFaceInstanceRaw}};
 
-pub const POLYGON_MODE: wgpu::PolygonMode = wgpu::PolygonMode::Fill;
-
-pub const RENDER_DISTANCE: usize = 32;
+pub const RENDER_DISTANCE: usize = 1;
 
 pub const CHUNK_SIZE: usize = 16;
 pub const WORLD_HEIGHT: usize = 384;
@@ -25,7 +23,7 @@ impl ChunkManager {
         let mut chunk_construction_time = std::time::Duration::ZERO;
         for z in 0..RENDER_DISTANCE {
             for x in 0..RENDER_DISTANCE {
-                let chunk = WorldChunk::perlin([x as i32, z as i32].into(), device);
+                let chunk = WorldChunk::randomized([x as i32, z as i32].into(), device);
                 
                 chunks.push(chunk);
             }
@@ -130,8 +128,6 @@ pub struct World {
     pub depth_texture: crate::texture::Texture,
     pub gui_renderer: crate::egui_renderer::EguiRenderer,
     pub vertex_buffer: wgpu::Buffer,
-    pub indirect_buffer: wgpu::Buffer,
-    pub world_buffer: wgpu::Buffer,
 }
 
 impl World {
@@ -153,21 +149,7 @@ impl World {
         });
 
         // camera bind group layout
-        let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("camera bind group layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None
-                    },
-                    count: None,
-                    visibility: wgpu::ShaderStages::VERTEX
-                }
-            ]
-        });
+        let camera_bind_group_layout = CameraUniform::bind_group_layout(device);
 
         // camera bind group
         let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -180,37 +162,11 @@ impl World {
                 }
             ]
         });
-        
-        // shader module
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("chunk shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("chunk.wgsl").into())
-        });
 
         let texture_atlas_bytes = include_bytes!("textures/texture_atlas.png");
         let texture_atlas = crate::texture::Texture::from_bytes(&device, &queue, texture_atlas_bytes, "texture").unwrap();
 
-        let texture_atlas_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("texture bind group"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        multisampled: false,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true }
-                    },
-                    count: None
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None
-                }
-            ]
-        });
+        let texture_atlas_bind_group_layout = crate::texture::Texture::texture_atlas_bind_group_layout(device);
 
         let texture_atlas_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("diffuse bind group"),
@@ -227,77 +183,7 @@ impl World {
             ]
         });
 
-        let translation_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("translation_bind_group_layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    count: None,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None
-                    },
-                    visibility: wgpu::ShaderStages::VERTEX
-                }
-            ]
-        });
-
-        // pipeline layout
-        let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("chunk pipeline layout"),
-            bind_group_layouts: &[
-                &texture_atlas_bind_group_layout,
-                &camera_bind_group_layout,
-                &translation_bind_group_layout
-            ],
-            push_constant_ranges: &[]
-        });
-
-        // pipeline
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("render pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                buffers: &[
-                    crate::block_vertex::RawBlockVertex::desc(),
-                    crate::instance::BlockFaceInstanceRaw::desc(),
-                ],
-                entry_point: "vs_main"
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL
-                })]
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleStrip,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                unclipped_depth: false,
-                polygon_mode: POLYGON_MODE,
-                conservative: false
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: crate::texture::Texture::DEPTH_FORMAT,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false
-            },
-            multiview: None
-        });
+        let render_pipeline = Self::create_render_pipeline(device, config, wgpu::PolygonMode::Fill);
 
         let depth_texture = crate::texture::Texture::create_depth_texture(&device, &config, "depth texture");
 
@@ -317,25 +203,7 @@ impl World {
             contents: bytemuck::cast_slice(&vertices)
         });
 
-        let indirect_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("indirect_buffer"),
-            usage: wgpu::BufferUsages::INDIRECT,
-            contents: wgpu::util::DrawIndirect  {
-                base_instance: 0,
-                base_vertex: 0,
-                vertex_count: Block::FACE_VERTICES.len() as u32,
-                instance_count: 10000,
-            }.as_bytes()
-        });
-        // println!("{}", ((CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE) / 2) * RENDER_DISTANCE * RENDER_DISTANCE * 6 * 4 * 8);
-        let world_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("world_buffer"),
-            mapped_at_creation: false,
-            size: 0,//(((CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE) / 2) * RENDER_DISTANCE * RENDER_DISTANCE * 6 * 4 * 8) as u64,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        });
-
-        Self { camera, camera_bind_group, camera_buffer, camera_controller, camera_uniform, rendered_chunks: ChunkManager::new(&device, &queue), render_pipeline, texture_atlas_bind_group, depth_texture, gui_renderer, vertex_buffer, indirect_buffer, world_buffer }
+        Self { camera, camera_bind_group, camera_buffer, camera_controller, camera_uniform, rendered_chunks: ChunkManager::new(&device, &queue), render_pipeline, texture_atlas_bind_group, depth_texture, gui_renderer, vertex_buffer }
     }
 
     pub fn render(&mut self, device: &wgpu::Device, queue: &wgpu::Queue,config: &wgpu::SurfaceConfiguration, surface: &wgpu::Surface, window: &winit::window::Window, render_time: std::time::Duration, update_time: std::time::Duration) {
@@ -402,6 +270,70 @@ impl World {
         window.pre_present_notify();
         output.present();
     }
+
+    pub fn create_render_pipeline(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, polygon_mode: wgpu::PolygonMode) -> wgpu::RenderPipeline {
+        // shader module
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("chunk shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("chunk.wgsl").into())
+        });
+
+        // pipeline layout
+        let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("chunk pipeline layout"),
+            bind_group_layouts: &[
+                &crate::texture::Texture::texture_atlas_bind_group_layout(device),
+                &CameraUniform::bind_group_layout(device),
+                &ChunkTranslation::bind_group_layout(device)
+            ],
+            push_constant_ranges: &[]
+        });
+
+        // pipeline
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("render pipeline"),
+            layout: Some(&render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                buffers: &[
+                    crate::block_vertex::RawBlockVertex::desc(),
+                    crate::instance::BlockFaceInstanceRaw::desc(),
+                ],
+                entry_point: "vs_main"
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL
+                })]
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleStrip,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                unclipped_depth: false,
+                polygon_mode,
+                conservative: false
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: crate::texture::Texture::DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false
+            },
+            multiview: None
+        })
+    }
 }
 
 pub struct WorldChunk {
@@ -413,6 +345,29 @@ pub struct WorldChunk {
 #[derive(Debug, Clone)]
 pub struct Chunk {
     pub blocks: Box<[Block]>,
+}
+
+pub struct VisitedFacesBitmap(pub [u16; CHUNK_SIZE]);
+
+impl VisitedFacesBitmap {
+    pub fn new() -> Self {
+        Self([0; CHUNK_SIZE])
+    }
+
+    #[inline]
+    pub fn get(&self, index: (usize, usize)) -> bool {
+        let mask = 1 << index.0;
+
+        (self.0[index.1] & mask) > 0
+    }
+
+    #[inline]
+    pub fn set(&mut self, index: (usize, usize), value: bool) {
+        let shifted_value = (value as u16) << index.0;
+        let mask = !(1 << index.0);
+
+        self.0[index.1] = (self.0[index.1] & mask) | shifted_value;
+    }
 }
 
 pub const MAX_CHUNK_BUCKET_SIZE: u32 = (CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE * 3 * std::mem::size_of::<BlockFaceInstanceRaw>()) as u32;
@@ -610,6 +565,7 @@ impl WorldChunk {
         queue.write_buffer(&self.mesh.indirect_buffer, (index * std::mem::size_of::<wgpu::util::DrawIndirect>()) as u64, indirect_args.as_bytes());
     }
 
+    #[inline]
     pub fn greedy_mesh_chunk(&mut self, index: usize, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut instances = Box::new([BlockFaceInstanceRaw(0); CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE * 3]);
         let mut i = 0;
@@ -617,20 +573,19 @@ impl WorldChunk {
 
         // pos x
         for x in 0..CHUNK_SIZE { 
-            let mut visited = [[false; CHUNK_SIZE]; CHUNK_SIZE];
+            let mut visited = VisitedFacesBitmap::new();
             for z in 0..CHUNK_SIZE {
                 for y in 0..CHUNK_SIZE {
-                    if visited[y][z] { continue; }
-                    let mut tile_y = 0;
-                    let mut tile_z = 1;
-
                     let block = &chunk[(x, y, z)];
 
-                    if block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(0) { continue; }
+                    if block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(0) || visited.get((y,z)) { continue; }
 
-                    for t_y in y..CHUNK_SIZE {
+                    let mut tile_y = 1;
+                    let mut tile_z = 1;
+
+                    for t_y in y + 1..CHUNK_SIZE {
                         let next_block = &chunk[(x, t_y, z)];
-                        if block.material != next_block.material || visited[t_y][z] || !next_block.adjacent_blocks_bitmap.face_visible(0) {
+                        if block.material != next_block.material || visited.get((t_y,z)) || !next_block.adjacent_blocks_bitmap.face_visible(0) {
                             break;
                         }
                         tile_y += 1;
@@ -639,7 +594,7 @@ impl WorldChunk {
                     'tz_loop: for t_z in z + 1..CHUNK_SIZE {
                         for t_y in y..y + tile_y {
                             let next_block = &chunk[(x, t_y, t_z)];
-                            if block.material != next_block.material ||  visited[t_y][t_z] || !next_block.adjacent_blocks_bitmap.face_visible(0) {
+                            if block.material != next_block.material || visited.get((t_y,t_z)) || !next_block.adjacent_blocks_bitmap.face_visible(0) {
                                 break 'tz_loop;
                             }
                         }
@@ -648,7 +603,7 @@ impl WorldChunk {
 
                     for t_z in z..z + tile_z {
                         for t_y in y..y + tile_y {
-                            visited[t_y][t_z] = true;
+                            visited.set((t_y,t_z), true);
                         }
                     }
 
@@ -656,7 +611,7 @@ impl WorldChunk {
                         position: Point3::new(x as u8, y as u8, z as u8),
                         face: unsafe { std::mem::transmute::<u32, Face>(0 as u32) },
                         texture_index: block.material.texture_index()[0],
-                        greedy_tiling: Point2::new(tile_z as u8 - 1 , tile_y as u8 - 1)
+                        greedy_tiling: Point2::new(tile_z as u8 - 1, tile_y as u8 - 1)
                     }.to_raw();
 
                     i += 1;
@@ -666,20 +621,19 @@ impl WorldChunk {
 
         // neg x
         for x in 0..CHUNK_SIZE { 
-            let mut visited = [[false; CHUNK_SIZE]; CHUNK_SIZE];
+            let mut visited = VisitedFacesBitmap::new();
             for z in 0..CHUNK_SIZE {
                 for y in 0..CHUNK_SIZE {
-                    if visited[y][z] { continue; }
-                    let mut tile_y = 0;
+                    let mut tile_y = 1;
                     let mut tile_z = 1;
 
                     let block = &chunk[(x, y, z)];
 
-                    if block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(1) { continue; }
+                    if block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(1) || visited.get((y, z)) { continue; }
 
-                    for t_y in y..CHUNK_SIZE {
+                    for t_y in y + 1..CHUNK_SIZE {
                         let next_block = &chunk[(x, t_y, z)];
-                        if block.material != next_block.material || visited[t_y][z] || !next_block.adjacent_blocks_bitmap.face_visible(1) {
+                        if block.material != next_block.material || visited.get((t_y, z)) || !next_block.adjacent_blocks_bitmap.face_visible(1) {
                             break;
                         }
                         tile_y += 1;
@@ -688,7 +642,7 @@ impl WorldChunk {
                     'tz_loop: for t_z in z + 1..CHUNK_SIZE {
                         for t_y in y..y + tile_y {
                             let next_block = &chunk[(x, t_y, t_z)];
-                            if block.material != next_block.material ||  visited[t_y][t_z] || !next_block.adjacent_blocks_bitmap.face_visible(1) {
+                            if block.material != next_block.material ||  visited.get((t_y, t_z)) || !next_block.adjacent_blocks_bitmap.face_visible(1) {
                                 break 'tz_loop;
                             }
                         }
@@ -697,7 +651,7 @@ impl WorldChunk {
 
                     for t_z in z..z + tile_z {
                         for t_y in y..y + tile_y {
-                            visited[t_y][t_z] = true;
+                            visited.set((t_y, t_z), true);
                         }
                     }
 
@@ -705,7 +659,7 @@ impl WorldChunk {
                         position: Point3::new(x as u8, y as u8, z as u8),
                         face: unsafe { std::mem::transmute::<u32, Face>(1 as u32) },
                         texture_index: block.material.texture_index()[1],
-                        greedy_tiling: Point2::new(tile_z as u8 - 1 , tile_y as u8 - 1)
+                        greedy_tiling: Point2::new(tile_z as u8 - 1, tile_y as u8 - 1)
                     }.to_raw();
 
                     i += 1;
@@ -715,20 +669,19 @@ impl WorldChunk {
 
         // pos z
         for z in 0..CHUNK_SIZE { 
-            let mut visited = [[false; CHUNK_SIZE]; CHUNK_SIZE];
+            let mut visited = VisitedFacesBitmap::new();
             for x in 0..CHUNK_SIZE {
                 for y in 0..CHUNK_SIZE {
-                    if visited[y][x] { continue; }
-                    let mut tile_y = 0;
+                    let mut tile_y = 1;
                     let mut tile_x = 1;
 
                     let block = &chunk[(x, y, z)];
 
-                    if block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(2) { continue; }
+                    if block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(2) || visited.get((y, x)) { continue; }
 
-                    for t_y in y..CHUNK_SIZE {
+                    for t_y in y + 1..CHUNK_SIZE {
                         let next_block = &chunk[(x, t_y, z)];
-                        if block.material != next_block.material || visited[t_y][x] || !next_block.adjacent_blocks_bitmap.face_visible(2) {
+                        if block.material != next_block.material || visited.get((t_y, x)) || !next_block.adjacent_blocks_bitmap.face_visible(2) {
                             break;
                         }
                         tile_y += 1;
@@ -737,7 +690,7 @@ impl WorldChunk {
                     'tx_loop: for t_x in x + 1..CHUNK_SIZE {
                         for t_y in y..y + tile_y {
                             let next_block = &chunk[(t_x, t_y, z)];
-                            if block.material != next_block.material ||  visited[t_y][t_x] || !next_block.adjacent_blocks_bitmap.face_visible(2) {
+                            if block.material != next_block.material ||  visited.get((t_y, t_x)) || !next_block.adjacent_blocks_bitmap.face_visible(2) {
                                 break 'tx_loop;
                             }
                         }
@@ -746,7 +699,7 @@ impl WorldChunk {
 
                     for t_x in x..x + tile_x {
                         for t_y in y..y + tile_y {
-                            visited[t_y][t_x] = true;
+                            visited.set((t_y, t_x), true);
                         }
                     }
 
@@ -754,7 +707,7 @@ impl WorldChunk {
                         position: Point3::new(x as u8, y as u8, z as u8),
                         face: unsafe { std::mem::transmute::<u32, Face>(2 as u32) },
                         texture_index: block.material.texture_index()[2],
-                        greedy_tiling: Point2::new(tile_x as u8 - 1 , tile_y as u8 - 1)
+                        greedy_tiling: Point2::new(tile_x as u8 - 1, tile_y as u8 - 1)
                     }.to_raw();
 
                     i += 1;
@@ -764,20 +717,19 @@ impl WorldChunk {
 
         // neg z
         for z in 0..CHUNK_SIZE { 
-            let mut visited = [[false; CHUNK_SIZE]; CHUNK_SIZE];
+            let mut visited = VisitedFacesBitmap::new();
             for x in 0..CHUNK_SIZE {
                 for y in 0..CHUNK_SIZE {
-                    if visited[y][x] { continue; }
-                    let mut tile_y = 0;
+                    let mut tile_y = 1;
                     let mut tile_x = 1;
 
                     let block = &chunk[(x, y, z)];
 
-                    if block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(3) { continue; }
+                    if block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(3) || visited.get((y, x)) { continue; }
 
-                    for t_y in y..CHUNK_SIZE {
+                    for t_y in y + 1..CHUNK_SIZE {
                         let next_block = &chunk[(x, t_y, z)];
-                        if block.material != next_block.material || visited[t_y][x] || !next_block.adjacent_blocks_bitmap.face_visible(3) {
+                        if block.material != next_block.material || visited.get((t_y, x)) || !next_block.adjacent_blocks_bitmap.face_visible(3) {
                             break;
                         }
                         tile_y += 1;
@@ -786,7 +738,7 @@ impl WorldChunk {
                     'tx_loop: for t_x in x + 1..CHUNK_SIZE {
                         for t_y in y..y + tile_y {
                             let next_block = &chunk[(t_x, t_y, z)];
-                            if block.material != next_block.material ||  visited[t_y][t_x] || !next_block.adjacent_blocks_bitmap.face_visible(3) {
+                            if block.material != next_block.material ||  visited.get((t_y, t_x)) || !next_block.adjacent_blocks_bitmap.face_visible(3) {
                                 break 'tx_loop;
                             }
                         }
@@ -795,7 +747,7 @@ impl WorldChunk {
 
                     for t_x in x..x + tile_x {
                         for t_y in y..y + tile_y {
-                            visited[t_y][t_x] = true;
+                            visited.set((t_y, t_x), true);
                         }
                     }
 
@@ -803,7 +755,7 @@ impl WorldChunk {
                         position: Point3::new(x as u8, y as u8, z as u8),
                         face: unsafe { std::mem::transmute::<u32, Face>(3 as u32) },
                         texture_index: block.material.texture_index()[3],
-                        greedy_tiling: Point2::new(tile_x as u8 - 1 , tile_y as u8 - 1)
+                        greedy_tiling: Point2::new(tile_x as u8 - 1, tile_y as u8 - 1)
                     }.to_raw();
 
                     i += 1;
@@ -813,20 +765,19 @@ impl WorldChunk {
 
         // pos y
         for y in 0..CHUNK_SIZE { 
-            let mut visited = [[false; CHUNK_SIZE]; CHUNK_SIZE];
+            let mut visited = VisitedFacesBitmap::new();
             for z in 0..CHUNK_SIZE {
                 for x in 0..CHUNK_SIZE {
-                    if visited[x][z] { continue; }
-                    let mut tile_x = 0;
+                    let mut tile_x = 1;
                     let mut tile_z = 1;
 
                     let block = &chunk[(x, y, z)];
 
-                    if block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(4) { continue; }
+                    if block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(4) || visited.get((x, z)) { continue; }
 
-                    for t_x in x..CHUNK_SIZE {
+                    for t_x in x + 1..CHUNK_SIZE {
                         let next_block = &chunk[(t_x, y, z)];
-                        if block.material != next_block.material || visited[t_x][z] || !next_block.adjacent_blocks_bitmap.face_visible(4) {
+                        if block.material != next_block.material || visited.get((t_x, z)) || !next_block.adjacent_blocks_bitmap.face_visible(4) {
                             break;
                         }
                         tile_x += 1;
@@ -835,7 +786,7 @@ impl WorldChunk {
                     'tz_loop: for t_z in z + 1..CHUNK_SIZE {
                         for t_x in x..x + tile_x {
                             let next_block = &chunk[(t_x, y, t_z)];
-                            if block.material != next_block.material ||  visited[t_x][t_z] || !next_block.adjacent_blocks_bitmap.face_visible(4) {
+                            if block.material != next_block.material ||  visited.get((t_x, t_z)) || !next_block.adjacent_blocks_bitmap.face_visible(4) {
                                 break 'tz_loop;
                             }
                         }
@@ -844,7 +795,7 @@ impl WorldChunk {
 
                     for t_z in z..z + tile_z {
                         for t_x in x..x + tile_x {
-                            visited[t_x][t_z] = true;
+                            visited.set((t_x, t_z), true);
                         }
                     }
 
@@ -852,7 +803,7 @@ impl WorldChunk {
                         position: Point3::new(x as u8, y as u8, z as u8),
                         face: unsafe { std::mem::transmute::<u32, Face>(4 as u32) },
                         texture_index: block.material.texture_index()[4],
-                        greedy_tiling: Point2::new(tile_z as u8 - 1 , tile_x as u8 - 1)
+                        greedy_tiling: Point2::new(tile_z as u8 - 1, tile_x as u8 - 1)
                     }.to_raw();
 
                     i += 1;
@@ -862,20 +813,19 @@ impl WorldChunk {
 
         // neg y
         for y in 0..CHUNK_SIZE { 
-            let mut visited = [[false; CHUNK_SIZE]; CHUNK_SIZE];
+            let mut visited = VisitedFacesBitmap::new();
             for z in 0..CHUNK_SIZE {
                 for x in 0..CHUNK_SIZE {
-                    if visited[x][z] { continue; }
-                    let mut tile_x = 0;
+                    let mut tile_x = 1;
                     let mut tile_z = 1;
 
                     let block = &chunk[(x, y, z)];
 
-                    if block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(5) { continue; }
+                    if block.material == Material::Air || !block.adjacent_blocks_bitmap.face_visible(5) || visited.get((x, z)) { continue; }
 
-                    for t_x in x..CHUNK_SIZE {
+                    for t_x in x + 1..CHUNK_SIZE {
                         let next_block = &chunk[(t_x, y, z)];
-                        if block.material != next_block.material || visited[t_x][z] || !next_block.adjacent_blocks_bitmap.face_visible(5) {
+                        if block.material != next_block.material || visited.get((t_x, z)) || !next_block.adjacent_blocks_bitmap.face_visible(5) {
                             break;
                         }
                         tile_x += 1;
@@ -884,7 +834,7 @@ impl WorldChunk {
                     'tz_loop: for t_z in z + 1..CHUNK_SIZE {
                         for t_x in x..x + tile_x {
                             let next_block = &chunk[(t_x, y, t_z)];
-                            if block.material != next_block.material ||  visited[t_x][t_z] || !next_block.adjacent_blocks_bitmap.face_visible(5) {
+                            if block.material != next_block.material ||  visited.get((t_x, t_z)) || !next_block.adjacent_blocks_bitmap.face_visible(5) {
                                 break 'tz_loop;
                             }
                         }
@@ -893,7 +843,7 @@ impl WorldChunk {
 
                     for t_z in z..z + tile_z {
                         for t_x in x..x + tile_x {
-                            visited[t_x][t_z] = true;
+                            visited.set((t_x, t_z), true);
                         }
                     }
 
@@ -901,7 +851,7 @@ impl WorldChunk {
                         position: Point3::new(x as u8, y as u8, z as u8),
                         face: unsafe { std::mem::transmute::<u32, Face>(5 as u32) },
                         texture_index: block.material.texture_index()[5],
-                        greedy_tiling: Point2::new(tile_x as u8 - 1 , tile_z as u8 - 1)
+                        greedy_tiling: Point2::new(tile_z as u8 - 1, tile_x as u8 - 1)
                     }.to_raw();
 
                     i += 1;
@@ -1000,7 +950,7 @@ impl Chunk {
         for i in 0..CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE {
             let material = match rng.gen_range(0..2) {
                 0 => Material::Air,
-                1 => Material::Cobblestone,
+                1 => Material::Grass,
                 _ => unreachable!()
             };
 

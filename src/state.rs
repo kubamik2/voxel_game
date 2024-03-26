@@ -68,7 +68,13 @@ impl State {
     }
 
     pub fn input(&mut self, event: &winit::event::WindowEvent) {
-        self.world.camera_controller.process_events(event);
+        if self.world.camera_controller.process_events(event) == Some(winit::keyboard::KeyCode::F1) {
+            self.world.render_pipeline = if self.world.camera_controller.controls.f1_toggled {
+                World::create_render_pipeline(&self.device, &self.config, wgpu::PolygonMode::Line)
+            } else {
+                World::create_render_pipeline(&self.device, &self.config, wgpu::PolygonMode::Fill)
+            }
+        }
     }
 
     pub fn update(&mut self, dt: f32) {

@@ -55,3 +55,23 @@ impl RawBlockVertex {
 pub struct ChunkTranslation {
     pub chunk_translation_offset: [f32; 2],
 }
+
+impl ChunkTranslation {
+    pub fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("translation_bind_group_layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    count: None,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None
+                    },
+                    visibility: wgpu::ShaderStages::VERTEX
+                }
+            ]
+        })
+    }
+}

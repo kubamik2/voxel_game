@@ -58,6 +58,24 @@ impl CameraUniform {
     pub fn update_view_projection(&mut self, camera: &Camera) {
         self.view_projection = camera.build_view_projection_matrix().into();
     }
+
+    pub fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("camera bind group layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None
+                    },
+                    count: None,
+                    visibility: wgpu::ShaderStages::VERTEX
+                }
+            ]
+        })
+    }
 }
 
 #[derive(Default)]
@@ -69,6 +87,7 @@ pub struct Controls {
     pub up_pressed: bool,
     pub down_pressed: bool,
     pub lctrl_pressed: bool,
+    pub f1_toggled: bool,
 }
 
 pub struct CameraController {
@@ -84,7 +103,7 @@ impl CameraController {
         }
     }
 
-    pub fn process_events(&mut self, event: &WindowEvent) {
+    pub fn process_events(&mut self, event: &WindowEvent) -> Option<KeyCode> {
         match event {
             WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(key_code), state, .. }, .. } => {
                 let pressed = state.is_pressed();
@@ -95,11 +114,13 @@ impl CameraController {
                     KeyCode::KeyD => { self.controls.right_pressed = pressed },
                     KeyCode::Space => { self.controls.up_pressed = pressed },
                     KeyCode::ShiftLeft => { self.controls.down_pressed = pressed },
-                    KeyCode::ControlLeft => { self.controls.lctrl_pressed = pressed }
+                    KeyCode::ControlLeft => { self.controls.lctrl_pressed = pressed },
+                    KeyCode::F1 if pressed => { self.controls.f1_toggled = !self.controls.f1_toggled }
                     _ => ()
                 }
+                Some(*key_code)
             }
-            _ => ()
+            _ => None
         }
     }
 
