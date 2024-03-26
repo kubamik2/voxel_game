@@ -8,7 +8,7 @@ struct VertexOutput {
 
 struct VertexInput {
     @location(0) packed_vertex_data: u32,
-    @location(1) packed_instance_data: u32,
+    @location(1) packed_instance_data: vec2u,
 }
 
 struct CameraUniform {
@@ -23,9 +23,9 @@ fn vs_main(in: VertexInput, @builtin(vertex_index) vertex_index: u32) -> VertexO
     var out: VertexOutput;
 
     let instance_position = vec3u(
-        in.packed_instance_data & 15u,
-        (in.packed_instance_data >> 4u) & 15u,
-        (in.packed_instance_data >> 8u) & 15u,
+        in.packed_instance_data.x & 31u,
+        (in.packed_instance_data.x >> 5u) & 31u,
+        (in.packed_instance_data.x >> 10u) & 31u,
     );
 
     var position = vec3u(
@@ -34,11 +34,10 @@ fn vs_main(in: VertexInput, @builtin(vertex_index) vertex_index: u32) -> VertexO
         ((in.packed_vertex_data >> 2u) & 1u),
     );
 
-    let greedy_x = ((in.packed_instance_data >> 23u) & 15u);
-    let greedy_y = ((in.packed_instance_data >> 27u) & 15u);
+    let greedy_x = ((in.packed_instance_data.x >> 26u) & 31u);
+    let greedy_y = ((in.packed_instance_data.x >> 31u) | (in.packed_instance_data.y << 1u) & 31u);
 
-    
-    let face = (in.packed_instance_data >> 12u) & 7u;
+    let face = (in.packed_instance_data.x >> 15u) & 7u;
 
     // face rotating
     switch face {
@@ -88,7 +87,7 @@ fn vs_main(in: VertexInput, @builtin(vertex_index) vertex_index: u32) -> VertexO
     // chunk translation
     let chunk_index = in.packed_vertex_data >> 3u;
     position += instance_position;
-    position.y += chunk_index * 16u;
+    position.y += chunk_index * 32u;
 
     var position_f32 = vec3f(
         f32(position.x) + chunk_translation.x,
@@ -114,7 +113,7 @@ fn vs_main(in: VertexInput, @builtin(vertex_index) vertex_index: u32) -> VertexO
         default: {} 
     }
 
-    let texture_index = (in.packed_instance_data >> 15u) & 255u;
+    let texture_index = (in.packed_instance_data.x >> 18u) & 255u;
 
     let uv_texture_offset = vec2f(f32(texture_index % 16u) * 0.0625, f32(texture_index / 16u) * 0.0625);
     uv += uv_texture_offset;

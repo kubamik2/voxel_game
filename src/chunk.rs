@@ -5,9 +5,9 @@ use std::ops::{Index, IndexMut};
 
 use crate::{block::*, block_vertex::{BlockVertex, ChunkTranslation, Face, RawBlockVertex}, camera::*, instance::{BlockFaceInstance, BlockFaceInstanceRaw}};
 
-pub const RENDER_DISTANCE: usize = 8;
+pub const RENDER_DISTANCE: usize = 4;
 
-pub const CHUNK_SIZE: usize = 16;
+pub const CHUNK_SIZE: usize = 32;
 pub const WORLD_HEIGHT: usize = 384;
 
 pub const CHUNKS_PER_WORLD_CHUNK: usize = WORLD_HEIGHT / CHUNK_SIZE;
@@ -21,6 +21,7 @@ impl ChunkManager {
         let mut chunks = vec![];
 
         let mut chunk_construction_time = std::time::Duration::ZERO;
+        let world_creation_time = std::time::Instant::now();
         for z in 0..RENDER_DISTANCE {
             for x in 0..RENDER_DISTANCE {
                 let chunk = WorldChunk::perlin([x as i32, z as i32].into(), device);
@@ -42,6 +43,7 @@ impl ChunkManager {
 
         println!("chunk_construction_time: {:?}", chunk_construction_time / (RENDER_DISTANCE.pow(2) * CHUNKS_PER_WORLD_CHUNK) as u32);
         println!("world_chunk_construction_time: {:?}", chunk_construction_time / (RENDER_DISTANCE.pow(2)) as u32);
+        println!("world_creation_time: {:?}", world_creation_time.elapsed());
         println!("chunk_baking_time: {:?}", chunk_baking_time);
         println!("world_chunks_instances: {}", manager.chunks.iter().map(|f| f.mesh.chunk_bucket_instances_count.iter().sum::<u32>()).sum::<u32>());
         manager
@@ -347,7 +349,7 @@ pub struct Chunk {
     pub blocks: Box<[Block]>,
 }
 
-pub struct VisitedFacesBitmap(pub [u16; CHUNK_SIZE]);
+pub struct VisitedFacesBitmap(pub [u32; CHUNK_SIZE]);
 
 impl VisitedFacesBitmap {
     pub fn new() -> Self {
@@ -363,7 +365,7 @@ impl VisitedFacesBitmap {
 
     #[inline]
     pub fn set(&mut self, index: (usize, usize), value: bool) {
-        let shifted_value = (value as u16) << index.0;
+        let shifted_value = (value as u32) << index.0;
         let mask = !(1 << index.0);
 
         self.0[index.1] = (self.0[index.1] & mask) | shifted_value;
