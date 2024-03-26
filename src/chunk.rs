@@ -5,7 +5,7 @@ use std::ops::{Index, IndexMut};
 
 use crate::{block::*, block_vertex::{BlockVertex, ChunkTranslation, Face, RawBlockVertex}, camera::*, instance::{BlockFaceInstance, BlockFaceInstanceRaw}};
 
-pub const RENDER_DISTANCE: usize = 32;
+pub const RENDER_DISTANCE: usize = 16;
 
 pub const CHUNK_SIZE: usize = 16;
 pub const WORLD_HEIGHT: usize = 384;
@@ -458,6 +458,8 @@ impl WorldChunk {
                     for x in 0..CHUNK_SIZE {
                         let val = ((perlin.get([(x as i32 + position.x * CHUNK_SIZE as i32) as f64 / 64.0, (z as i32 + position.y * CHUNK_SIZE as i32) as f64 / 64.0]) * 50.0) as i32 + 100) as usize;
                         if y + i * CHUNK_SIZE < val {
+                            blocks.push(Block { material: Material::Dirt, adjacent_blocks_bitmap: AdjacentBlockBitmap(u8::MAX) });
+                        } else if y + i * CHUNK_SIZE == val {
                             blocks.push(Block { material: Material::Grass, adjacent_blocks_bitmap: AdjacentBlockBitmap(u8::MAX) });
                         } else {
                             blocks.push(Block { material: Material::Air, adjacent_blocks_bitmap: AdjacentBlockBitmap(u8::MIN) });
@@ -551,7 +553,7 @@ impl WorldChunk {
                         instances[i] = BlockFaceInstance { 
                             position: Point3::new(x as u8, y as u8, z as u8),
                             face: unsafe { std::mem::transmute::<u32, Face>(face as u32) },
-                            material_index: block.material as u16,
+                            material_index: block.material.texture_index()[face],
                         }.to_raw();
                         i += 1;
                     }

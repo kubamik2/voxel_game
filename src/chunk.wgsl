@@ -1,9 +1,7 @@
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) position: vec3f,
-    @location(1) face: u32,
-    @location(2) texture_index: u32,
-    @location(3) chunk_index: u32,
+    @location(0) face: u32,
+    @location(1) uv: vec2f,
 }
 
 struct VertexInput {
@@ -19,7 +17,7 @@ struct CameraUniform {
 @group(2) @binding(0) var<uniform> chunk_translation: vec2f;
 
 @vertex
-fn vs_main(in: VertexInput, @builtin(instance_index) i: u32) -> VertexOutput {
+fn vs_main(in: VertexInput, @builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     var out: VertexOutput;
 
     let instance_position = vec3u(
@@ -34,7 +32,27 @@ fn vs_main(in: VertexInput, @builtin(instance_index) i: u32) -> VertexOutput {
         ((in.packed_vertex_data >> 2u) & 1u),
     );
 
-    let chunk_index = in.packed_vertex_data >> 3u;
+    var uv = vec2f();
+    switch vertex_index % 4u {
+        case 0u: {
+            uv = vec2f(0.0, 0.0625);
+        }
+        case 1u: {
+            uv = vec2f(0.0625, 0.0625);
+        }
+        case 2u: {
+            uv = vec2f(0.0, 0.0);
+        }
+        case 3u: {
+            uv = vec2f(0.0625, 0.0);
+        }
+        default: {}
+    }
+
+    let texture_index = in.packed_instance_data >> 15u;
+
+    uv.x += f32((texture_index) % 16u) * 0.0625;
+    uv.y += f32((texture_index - 1u) / 16u) * 0.0625;
 
     let face = (in.packed_instance_data >> 12u) & 7u;
     switch face {
@@ -60,6 +78,8 @@ fn vs_main(in: VertexInput, @builtin(instance_index) i: u32) -> VertexOutput {
         }
         default: {}
     }
+
+    let chunk_index = in.packed_vertex_data >> 3u;
     position += instance_position;
     position.y += chunk_index * 16u;
 
@@ -69,14 +89,10 @@ fn vs_main(in: VertexInput, @builtin(instance_index) i: u32) -> VertexOutput {
         f32(position.z) + chunk_translation.y,
     );
 
-    let texture_index = in.packed_instance_data >> 15u;
+    out.clip_position = camera.view_projection * vec4f(position_f32, 1.0);
 
-    out.clip_position = camera.view_projection * vec4f(position_f32.x, position_f32.y, position_f32.z, 1.0);
-
-    out.position = position_f32;
     out.face = face;
-    out.texture_index = texture_index;
-    out.chunk_index = chunk_index;
+    out.uv = uv;
     return out;
 }
 
@@ -85,43 +101,20 @@ fn vs_main(in: VertexInput, @builtin(instance_index) i: u32) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    let uv3 = vec3f(
-        fract(in.position.x) * 0.0625,
-        (1.0 - fract(in.position.y)) * 0.0625,
-        fract(in.position.z) * 0.0625,
-    );
-
     var shade = vec4f(1.0, 1.0, 1.0, 1.0);
-    var uv2 = vec2f();
     switch in.face {
-        case 0u: {
-            uv2 = uv3.zy;
-        }
         case 1u: {
             shade = vec4f(0.3, 0.3, 0.3, 1.0);
-            uv2 = uv3.zy;
-        }
-        case 2u: {
-            uv2 = uv3.xy;
         }
         case 3u: {
             shade = vec4f(0.3, 0.3, 0.3, 1.0);
-            uv2 = uv3.xy;
         }
         case 4u: {
             shade = vec4f(1.3, 1.3, 1.3, 1.0);
-            uv2 = uv3.xz;
-        }
-        case 5u: {
-            uv2 = uv3.xz;
         }
         default: {}
     }
 
-    uv2.x += f32(in.texture_index - 1u) * 0.0625;
+    return textureSample(t_diffuse, s_diffuse, in.uv) * shade;
 
-    return textureSample(t_diffuse, s_diffuse, uv2) * shade;
-
-//     let v = f32(in.chunk_index) / 23.0;
-//     return vec4f(v, v, v, 1.0);
 }
