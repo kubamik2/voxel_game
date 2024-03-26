@@ -1,4 +1,4 @@
-use cgmath::Point3;
+use cgmath::{Point2, Point3};
 use wgpu::vertex_attr_array;
 
 use crate::block_vertex::Face;
@@ -6,7 +6,8 @@ use crate::block_vertex::Face;
 pub struct BlockFaceInstance {
     pub position: Point3<u8>, // u12
     pub face: Face, // u3
-    pub material_index: u16, // u?
+    pub texture_index: u16, // u?
+    pub greedy_tiling: Point2<u8> // u8
 }
 
 impl BlockFaceInstance {
@@ -17,7 +18,9 @@ impl BlockFaceInstance {
         packed_data |= (self.position.y as u32) << 4;
         packed_data |= (self.position.z as u32) << 8;
         packed_data |= (self.face as u32) << 12;
-        packed_data |= (self.material_index as u32) << 15;
+        packed_data |= (self.texture_index as u32) << 15;
+        packed_data |= (self.greedy_tiling.x as u32) << 23;
+        packed_data |= (self.greedy_tiling.y as u32) << 27;
 
         BlockFaceInstanceRaw(packed_data)
     }
